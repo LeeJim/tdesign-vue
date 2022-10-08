@@ -10,6 +10,7 @@ import { useConfig } from '../config-provider/useConfig';
 import { BaseTableCol, TableRowData } from './type';
 import { renderTitle } from './hooks/useTableHeader';
 import TEllipsis from './ellipsis';
+import { formatClassNames } from './utils';
 
 export interface TheadProps {
   // 是否固定表头
@@ -28,10 +29,10 @@ export interface TheadProps {
   columnResizeParams: {
     resizeLineRef: HTMLDivElement;
     resizeLineStyle: Object;
-    onColumnMouseover: Function;
-    onColumnMousedown: Function;
+    onColumnMouseover: (e: MouseEvent, col: BaseTableCol<TableRowData>) => void;
+    onColumnMousedown: (e: MouseEvent, col: BaseTableCol<TableRowData>) => void;
   };
-  allowResizeColumnWidth: Boolean;
+  resizable: Boolean;
 }
 
 export default defineComponent({
@@ -43,7 +44,7 @@ export default defineComponent({
     thWidthList: Object as PropType<TheadProps['thWidthList']>,
     bordered: Boolean,
     isMultipleHeader: Boolean,
-    allowResizeColumnWidth: Boolean,
+    resizable: Boolean,
     spansAndLeafNodes: Object as PropType<TheadProps['spansAndLeafNodes']>,
     thList: Array as PropType<TheadProps['thList']>,
     columnResizeParams: Object as PropType<TheadProps['columnResizeParams']>,
@@ -62,7 +63,6 @@ export default defineComponent({
         [tableHeaderClasses.multipleHeader]: props.isMultipleHeader,
       },
     ]);
-    const { onColumnMouseover, onColumnMousedown } = props.columnResizeParams;
 
     return {
       ...classnames,
@@ -70,8 +70,6 @@ export default defineComponent({
       theadClasses,
       classPrefix,
       slots,
-      onColumnMouseover,
-      onColumnMousedown,
     };
   },
 
@@ -100,7 +98,7 @@ export default defineComponent({
             row: {},
             rowIndex: -1,
           };
-          const customClasses = isFunction(col.className) ? col.className({ ...colParams, type: 'th' }) : col.className;
+          const customClasses = formatClassNames(col.className, { ...colParams, type: 'th' });
           const thClasses = [
             thStyles.classes,
             customClasses,
@@ -115,13 +113,14 @@ export default defineComponent({
           const width = withoutChildren && thWidthList?.[col.colKey] ? `${thWidthList?.[col.colKey]}px` : undefined;
           const styles = { ...(thStyles.style || {}), width };
           const innerTh = renderTitle(h, this.slots, col, index);
-          const resizeColumnListener = this.allowResizeColumnWidth
+          const resizeColumnListener = this.resizable
             ? {
-              mousedown: (e: MouseEvent) => this.onColumnMousedown(e, col),
-              mousemove: (e: MouseEvent) => this.onColumnMouseover(e),
+              mousedown: (e: MouseEvent) => this.columnResizeParams?.onColumnMousedown?.(e, col),
+              mousemove: (e: MouseEvent) => this.columnResizeParams?.onColumnMouseover?.(e, col),
             }
             : {};
           const content = isFunction(col.ellipsisTitle) ? col.ellipsisTitle(h, { col, colIndex: index }) : undefined;
+          const isEllipsis = col.ellipsisTitle !== undefined ? Boolean(col.ellipsisTitle) : Boolean(col.ellipsis);
           return (
             <th
               key={col.colKey}
@@ -132,12 +131,12 @@ export default defineComponent({
               on={resizeColumnListener}
             >
               <div class={this.tableBaseClass.thCellInner}>
-                {col.ellipsis && col.ellipsisTitle !== false && col.ellipsisTitle !== null ? (
+                {isEllipsis ? (
                   <TEllipsis
                     placement="bottom"
                     attach={this.theadRef ? () => this.theadRef : undefined}
-                    popupContent={content && (() => content)}
-                    popupProps={typeof col.ellipsisTitle === 'object' ? col.ellipsisTitle : undefined}
+                    tooltipContent={content && (() => content)}
+                    tooltipProps={typeof col.ellipsisTitle === 'object' ? col.ellipsisTitle : undefined}
                   >
                     {innerTh}
                   </TEllipsis>

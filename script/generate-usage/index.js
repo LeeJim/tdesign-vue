@@ -8,9 +8,11 @@ const renderUsageStr = (compStrMap) => `<!-- 该脚本为自动生成，如有�
 <template>
   <base-usage :code="usageCode" :config-list="configList" :panel-list="panelList" @PanelChange="onPanelChange">
     ${Object.keys(compStrMap.render)
-    .map((key) => `<template #${key}="{ configProps }">
+    .map(
+      (key) => `<template #${key}="{ configProps }">
       ${compStrMap.render[key].trim()}
-    </template>`)
+    </template>`,
+    )
     .join('\n')}
   </base-usage>
 </template>
@@ -18,7 +20,7 @@ const renderUsageStr = (compStrMap) => `<!-- 该脚本为自动生成，如有�
 <script setup lang="jsx">
 /* eslint-disable */
 import { ref, onMounted } from '@vue/composition-api';
-${compStrMap.importStr ? compStrMap.importStr.trim() : 'import configJson from \'./props.json\';'}
+${compStrMap.importStr ? compStrMap.importStr.trim() : "import configJson from './props.json';"}
 ${compStrMap.script ? compStrMap.script.trim() : ''}
 
 ${compStrMap.configStr ? compStrMap.configStr.trim() : 'const configList = ref(configJson);'}
@@ -43,14 +45,14 @@ ${
 function genUsage() {
   // eslint-disable-next-line no-restricted-syntax
   for (const name of Object.keys(config)) {
-    const fileFolderPath = path.resolve(__dirname, `../../examples/${name}/usage`);
+    const fileFolderPath = path.resolve(__dirname, `../../src/${name}/_usage`);
     if (!fs.existsSync(fileFolderPath)) {
       fs.mkdirSync(fileFolderPath);
     }
 
     try {
       const data = renderUsageStr(config[name]);
-      const filePath = path.resolve(__dirname, `../../examples/${name}/usage/index.vue`);
+      const filePath = path.resolve(__dirname, `../../src/${name}/_usage/index.vue`);
       fs.writeFileSync(filePath, codeFormat(data));
     } catch (err) {
       console.error(`${name} usage 组件生成失败...`, err);

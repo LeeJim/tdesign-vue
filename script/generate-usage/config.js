@@ -53,9 +53,26 @@ module.exports = {
     },
   },
   'date-picker': {
-    panelStr: `const panelList = [{label: 'datePicker', value: 'datePicker'}];`,
+    importStr: `
+      import datePickerConfigJson from './date-picker-props.json';\n
+      import dateRangePickerConfigJson from './date-range-picker-props.json';\n
+    `,
+    configStr: `const configList = ref(datePickerConfigJson);`,
+    panelStr: `
+      const panelList = [
+        {label: 'datePicker', value: 'datePicker', config: datePickerConfigJson},
+        {label: 'dateRangePicker', value: 'dateRangePicker', config: dateRangePickerConfigJson}
+      ];
+    `,
+    panelChangeStr: `
+      function onPanelChange(panel) {
+        configList.value = panelList.find(item => item.value === panel).config;
+        usageCode.value = \`<template>\${usageCodeMap[panel].trim()}</template>\`;
+      }
+    `,
     render: {
       datePicker: `<t-date-picker v-bind="configProps" />`,
+      dateRangePicker: `<t-date-range-picker v-bind="configProps" />`,
     },
   },
   dropdown: {
@@ -143,19 +160,23 @@ module.exports = {
   table: {
     importStr: `
       import baseConfigJson from './base-table-props.json';\n
-      import primaryConfigJson from './primary-table-props.json';\n
     `,
     configStr: `const configList = ref(baseConfigJson);`,
     script: `
-      const visible = ref(false);
-      const handleClick = () => {
-        visible.value = !visible.value;
-      };
+      const data = ref(Array(30).fill(0).map((_, i) => ({
+        index: i,
+        platform: '公有',
+        description: '数据源',
+      })));
+      const columns = ref([
+        {colKey: 'index', title: 'index'},
+        {colKey: 'platform', title: '平台'},
+        {colKey: 'description', title: '说明'},
+      ]);
     `,
     panelStr: `
       const panelList = [
-        {label: 'baseTable', value: 'baseTable', config: baseConfigJson},
-        {label: 'primaryTable', value: 'primaryTable', config: primaryConfigJson}
+        {label: 'baseTable', value: 'baseTable', config: baseConfigJson}
       ];
     `,
     panelChangeStr: `
@@ -168,41 +189,11 @@ module.exports = {
       baseTable: `<t-table
         v-bind="configProps"
         row-key="index"
-        :data="[{index:1,platform:'公用'},{index:2,platform:'私有'}]"
-        :columns="[{
-          align: 'center',
-          width: '100',
-          colKey: 'index',
-          title: '序号',
-        },
-        {
-          width: 100,
-          colKey: 'platform',
-          title: '平台',
-        }]"
+        :maxHeight="140"
+        :pagination="{ total: 30 }"
+        :data="data"
+        :columns="columns"
       />`,
-      primaryTable: `
-        <div>
-          <t-button @click="visible = true">列配置</t-button>
-          <t-table
-            v-bind="configProps"
-            row-key="index"
-            :columnControllerVisible.sync="visible"
-            :data="[{index:1,platform:'公用'},{index:2,platform:'私有'}]"
-            :columns="[{
-              align: 'center',
-              width: '100',
-              colKey: 'index',
-              title: '序号',
-            },
-            {
-              width: 100,
-              colKey: 'platform',
-              title: '平台',
-            }]"
-          />
-        </div>
-      `,
     },
   },
   tabs: {
@@ -503,17 +494,30 @@ module.exports = {
   },
   tree: {
     panelStr: `const panelList = [{label: 'tree', value: 'tree'}];`,
+    script: `
+      const data = ref([{ label: '第一段',
+        children: [ { label: '第二段' }, { label: '第二段' } ],
+      },{
+        label: '第一段',
+        children: [ { label: '第二段' }, { label: '第二段' } ],
+      },{
+        label: '第一段',
+        children: [ { label: '第二段' }, { label: '第二段' } ],
+      }]);
+    `,
     render: {
       tree: `
-        <t-tree :data="[{ label: '第一段',
-          children: [ { label: '第二段' }, { label: '第二段' } ],
-        },{
-          label: '第一段',
-          children: [ { label: '第二段' }, { label: '第二段' } ],
-        },{
-          label: '第一段',
-          children: [ { label: '第二段' }, { label: '第二段' } ],
-        }]" v-bind="configProps" />
+        <t-tree :data="data" v-bind="configProps" />
+      `,
+    },
+  },
+  rate: {
+    panelStr: `const panelList = [{label: 'rate', value: 'rate'}];`,
+    render: {
+      rate: `
+        <t-rate
+          v-bind="configProps"
+        ></t-rate>
       `,
     },
   },
@@ -548,7 +552,7 @@ module.exports = {
       drawer: `
         <div>
           <t-button @click="handleClick">Open Drawer</t-button>
-          <t-drawer v-bind="configProps" :visible.sync="visible" header="header" :close-btn="true">
+          <t-drawer v-bind="configProps" :visible.sync="visible" header="header">
             <p>This is a Drawer</p>
           </t-drawer>
         </div>
@@ -558,13 +562,13 @@ module.exports = {
   message: {
     panelStr: `const panelList = [{label: 'message', value: 'message'}];`,
     render: {
-      message: `<t-message v-bind="configProps" :duration="0" content="这里是 Message 信息"  :closeBtn="true" />`,
+      message: `<t-message v-bind="configProps" :duration="0" content="这里是 Message 信息" />`,
     },
   },
   notification: {
     panelStr: `const panelList = [{label: 'notification', value: 'notification'}];`,
     render: {
-      notification: `<t-notification v-bind="configProps" duration="0" title="标题名称" content="这是一条消息通知" :closeBtn="true" />`,
+      notification: `<t-notification v-bind="configProps" duration="0" title="标题名称" content="这是一条消息通知" />`,
     },
   },
   popconfirm: {
@@ -599,6 +603,35 @@ module.exports = {
             这部分是每个折叠面板折叠或展开的内容，可根据不同业务或用户的使用诉求，进行自定义填充。可以是纯文本、图文、子列表等内容形式。
           </t-collapse-panel>
         </t-collapse>
+      `,
+    },
+  },
+  space: {
+    panelStr: `const panelList = [{label: 'space', value: 'space'}];`,
+    render: {
+      space: `
+        <t-space v-bind="configProps">
+          <t-button>Button</t-button>
+          <t-button>Button</t-button>
+          <t-button>Button</t-button>
+          <t-button>Button</t-button>
+        </t-space>
+      `,
+    },
+  },
+  jumper: {
+    panelStr: `const panelList = [{label: 'jumper', value: 'jumper'}];`,
+    render: {
+      jumper: `
+        <t-jumper v-bind="configProps"></t-jumper>
+      `,
+    },
+  },
+  image: {
+    panelStr: `const panelList = [{label: 'image', value: 'image'}];`,
+    render: {
+      image: `
+        <t-image v-bind="configProps" src="https://tdesign.gtimg.com/demo/demo-image-1.png" fit="cover" :style="{ width: '120px', height: '120px' }" />
       `,
     },
   },

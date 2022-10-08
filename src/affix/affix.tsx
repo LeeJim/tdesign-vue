@@ -1,11 +1,12 @@
 import Vue, { VueConstructor } from 'vue';
 import isFunction from 'lodash/isFunction';
-import { prefix } from '../config';
 import { on, off, getScrollContainer } from '../utils/dom';
 import affixProps from './props';
 import { ScrollContainerElement } from '../common';
+import { getClassPrefixMixins } from '../config-provider/config-receiver';
+import mixins from '../utils/mixins';
 
-const name = `${prefix}-affix`;
+const classMixins = getClassPrefixMixins('affix');
 export interface Affix extends Vue {
   scrollContainer: ScrollContainerElement;
   ticking: boolean;
@@ -16,11 +17,12 @@ export interface Affix extends Vue {
   };
 }
 
-export default (Vue as VueConstructor<Affix>).extend({
+export default mixins(Vue as VueConstructor<Affix>, classMixins).extend({
   name: 'TAffix',
   props: {
     ...affixProps,
   },
+
   watch: {
     offsetTop() {
       this.handleScroll();
@@ -71,7 +73,7 @@ export default (Vue as VueConstructor<Affix>).extend({
             const placeholderStatus = affixWrapRef.contains(this.placeholderEL);
 
             if (affixed) {
-              affixRef.className = name;
+              affixRef.className = this.componentName;
               affixRef.style.top = `${fixedTop}px`;
               affixRef.style.width = `${wrapWidth}px`;
               affixRef.style.height = `${wrapHeight}px`;
@@ -106,11 +108,13 @@ export default (Vue as VueConstructor<Affix>).extend({
   },
   mounted() {
     this.placeholderEL = document.createElement('div');
-    this.$nextTick(() => {
+    const timer = setTimeout(() => {
       this.scrollContainer = getScrollContainer(this.container);
+      this.handleScroll();
       on(this.scrollContainer, 'scroll', this.handleScroll);
       on(window, 'resize', this.handleScroll);
-    });
+      clearTimeout(timer);
+    }, 0);
   },
   destroyed() {
     if (!this.scrollContainer) return;

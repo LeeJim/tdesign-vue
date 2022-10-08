@@ -31,18 +31,20 @@ export default {
   /** 按下 ESC 时是否触发对话框关闭事件 */
   closeOnEscKeydown: {
     type: Boolean,
-    default: true,
+    default: undefined,
   },
   /** 点击蒙层时是否触发关闭事件 */
   closeOnOverlayClick: {
     type: Boolean,
-    default: true,
+    default: undefined,
   },
   /** 确认按钮。值为 null 则不显示确认按钮。值类型为字符串，则表示自定义按钮文本，值类型为 Object 则表示透传 Button 组件属性。使用 TNode 自定义按钮时，需自行控制确认事件 */
   confirmBtn: {
     type: [String, Object, Function] as PropType<TdDialogProps['confirmBtn']>,
     default: '',
   },
+  /** 是否在按下回车键时，触发确认事件 */
+  confirmOnEnter: Boolean,
   /** 对话框内容，同 body */
   default: {
     type: [String, Function] as PropType<TdDialogProps['default']>,
@@ -70,7 +72,7 @@ export default {
       return ['modal', 'modeless', 'normal'].includes(val);
     },
   },
-  /** 对话框位置，内置两种：垂直水平居中显示 和 靠近顶部（top:20%）显示 */
+  /** 对话框位置，内置两种：垂直水平居中显示 和 靠近顶部（top:20%）显示。默认情况，为避免贴顶或贴底，顶部和底部距离最小为 `48px`，可通过调整 `top` 覆盖默认大小 */
   placement: {
     type: String as PropType<TdDialogProps['placement']>,
     default: 'top' as TdDialogProps['placement'],
@@ -122,7 +124,7 @@ export default {
   onCloseBtnClick: Function as PropType<TdDialogProps['onCloseBtnClick']>,
   /** 对话框消失动画效果结束后触发 */
   onClosed: Function as PropType<TdDialogProps['onClosed']>,
-  /** 如果“确认”按钮存在，则点击“确认”按钮时触发 */
+  /** 如果“确认”按钮存在，则点击“确认”按钮时触发，或者键盘按下回车键时触发 */
   onConfirm: Function as PropType<TdDialogProps['onConfirm']>,
   /** 按下 ESC 时触发事件 */
   onEscKeydown: Function as PropType<TdDialogProps['onEscKeydown']>,

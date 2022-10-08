@@ -16,22 +16,24 @@ import isString from 'lodash/isString';
 import pick from 'lodash/pick';
 import get from 'lodash/get';
 import { CreateElement } from 'vue';
-import { formatRowAttributes, formatRowClassNames } from './utils';
+import { formatClassNames, formatRowAttributes, formatRowClassNames } from './utils';
 import { getRowFixedStyles, getColumnFixedStyles } from './hooks/useFixed';
 import { RowAndColFixedPosition } from './interface';
 import useClassName from './hooks/useClassName';
 import TEllipsis from './ellipsis';
 import {
-  BaseTableCellParams, TableRowData, RowspanColspan, TdPrimaryTableProps, PrimaryTableCellParams,
+  BaseTableCellParams, TableRowData, RowspanColspan, TdPrimaryTableProps, TdBaseTableProps,
 } from './type';
 import baseTableProps from './base-table-props';
-import useLazyLoad from './hooks/useLazyLoad';
+import { getCellKey, SkipSpansValue } from './hooks/useRowspanAndColspan';
+import useLazyLoad from '../hooks/useLazyLoad';
 
 export interface RenderTdExtra {
   rowAndColFixedPosition: RowAndColFixedPosition;
   columnLength: number;
   dataLength: number;
   cellSpans: RowspanColspan;
+  cellEmptyContent: TdBaseTableProps['cellEmptyContent'];
 }
 
 export interface RenderEllipsisCellParams {
@@ -49,6 +51,7 @@ export const TABLE_PROPS = [
   'rowAttributes',
   'rowspanAndColspan',
   'scroll',
+  'cellEmptyContent',
   'onCellClick',
   'onRowClick',
   'onRowDblclick',
@@ -66,8 +69,7 @@ export interface TrProps extends TrCommonProps {
   rowIndex: number;
   dataLength: number;
   rowAndColFixedPosition?: RowAndColFixedPosition;
-  // 属性透传，引用传值，可内部改变
-  skipSpansMap?: Map<any, boolean>;
+  skipSpansMap?: Map<string, SkipSpansValue>;
   tableElm?: HTMLDivElement;
   scrollType?: string;
   isVirtual?: boolean;
@@ -75,13 +77,23 @@ export interface TrProps extends TrCommonProps {
   trs?: Map<number, object>;
   bufferSize?: number;
   tableContentElm?: HTMLDivElement;
-  onTrRowspanOrColspan?: (params: PrimaryTableCellParams<TableRowData>, cellSpans: RowspanColspan) => void;
+  cellEmptyContent: TdBaseTableProps['cellEmptyContent'];
 }
 
 export const ROW_LISTENERS = ['click', 'dblclick', 'mouseover', 'mousedown', 'mouseenter', 'mouseleave', 'mouseup'];
 
-export function renderCell(params: BaseTableCellParams<TableRowData>, slots: SetupContext['slots']) {
-  const { col, row } = params;
+export function renderCell(
+  params: BaseTableCellParams<TableRowData>,
+  slots: SetupContext['slots'],
+  extra?: {
+    cellEmptyContent?: TdBaseTableProps['cellEmptyContent'];
+  },
+) {
+  const { col, row, rowIndex } = params;
+  // support serial number column
+  if (col.colKey === 'serial-number') {
+    return rowIndex + 1;
+  }
   if (isFunction(col.cell)) {
     return col.cell(h, params);
   }
@@ -94,7 +106,15 @@ export function renderCell(params: BaseTableCellParams<TableRowData>, slots: Set
   if (isFunction(col.render)) {
     return col.render(h, { ...params, type: 'cell' });
   }
-  return get(row, col.colKey);
+  const r = get(row, col.colKey);
+  // 0 和 false 属于正常可用之，不能使用兜底逻辑 cellEmptyContent
+  if (![undefined, '', null].includes(r)) return r;
+  // cellEmptyContent 作为空数据兜底显示，用户可自定义
+  if (extra?.cellEmptyContent) {
+    return isFunction(extra.cellEmptyContent) ? extra.cellEmptyContent(h, params) : extra.cellEmptyContent;
+  }
+  if (slots.cellEmptyContent) return slots.cellEmptyContent(params);
+  return r;
 }
 
 // 表格行组件
@@ -108,8 +128,6 @@ export default defineComponent({
     rowAndColFixedPosition: Map as PropType<RowAndColFixedPosition>,
     // 合并单元格，是否跳过渲染
     skipSpansMap: Map as PropType<TrProps['skipSpansMap']>,
-    // 扫描到 rowspan 或者 colspan 时触发
-    onTrRowspanOrColspan: Function as PropType<TrProps['onTrRowspanOrColspan']>,
     ...pick(baseTableProps, TABLE_PROPS),
     scrollType: String,
     rowHeight: Number,
@@ -159,7 +177,6 @@ export default defineComponent({
       trRef,
       reactive({ ...props.scroll, rowIndex: props.rowIndex }),
     );
-
     const getTrListeners = (row: TableRowData, rowIndex: number) => {
       const trListeners: { [eventName: string]: (e: MouseEvent) => void } = {};
       // add events to row
@@ -219,16 +236,14 @@ export default defineComponent({
       params: RenderEllipsisCellParams,
     ) {
       const { cellNode } = params;
-      const { col, colIndex } = cellParams;
-      // 前两列左对齐显示
-      const placement = colIndex < 2 ? 'top-left' : 'top-right';
+      const { col } = cellParams;
       const content = isFunction(col.ellipsis) ? col.ellipsis(h, cellParams) : undefined;
       return (
         <TEllipsis
-          placement={placement}
+          placement={'top'}
           attach={this.tableElm ? () => this.tableElm : undefined}
-          popupContent={content && (() => content)}
-          popupProps={typeof col.ellipsis === 'object' ? col.ellipsis : undefined}
+          tooltipContent={content && (() => content)}
+          tooltipProps={typeof col.ellipsis === 'object' ? col.ellipsis : undefined}
         >
           {cellNode}
         </TEllipsis>
@@ -238,9 +253,9 @@ export default defineComponent({
     renderTd(h: CreateElement, params: BaseTableCellParams<TableRowData>, extra: RenderTdExtra) {
       const { col, colIndex, rowIndex } = params;
       const { cellSpans, dataLength, rowAndColFixedPosition } = extra;
-      const cellNode = renderCell(params, this.tSlots);
+      const cellNode = renderCell(params, this.tSlots, { cellEmptyContent: extra.cellEmptyContent });
       const tdStyles = getColumnFixedStyles(col, colIndex, rowAndColFixedPosition, this.tableColFixedClasses);
-      const customClasses = isFunction(col.className) ? col.className({ ...params, type: 'td' }) : col.className;
+      const customClasses = formatClassNames(col.className, { ...params, type: 'td' });
       const classes = [
         tdStyles.classes,
         customClasses,
@@ -279,19 +294,20 @@ export default defineComponent({
         rowIndex,
         colIndex,
       };
-      if (isFunction(this.rowspanAndColspan)) {
-        const o = this.rowspanAndColspan(params);
-        o?.rowspan > 1 && (cellSpans.rowspan = o.rowspan);
-        o?.colspan > 1 && (cellSpans.colspan = o.colspan);
-        this.onTrRowspanOrColspan?.(params, cellSpans);
+      let spanState = null;
+      if (this.skipSpansMap.size) {
+        const cellKey = getCellKey(row, this.rowKey, col.colKey, colIndex);
+        spanState = this.skipSpansMap.get(cellKey) || {};
+        spanState?.rowspan > 1 && (cellSpans.rowspan = spanState.rowspan);
+        spanState?.colspan > 1 && (cellSpans.colspan = spanState.colspan);
+        if (spanState.skipped) return null;
       }
-      const skipped = this.skipSpansMap?.get([rowIndex, colIndex].join());
-      if (skipped) return null;
       return this.renderTd(h, params, {
         dataLength,
         rowAndColFixedPosition,
         columnLength: this.columns.length,
         cellSpans,
+        cellEmptyContent: this.cellEmptyContent,
       });
     });
     const attrs = this.trAttributes || {};

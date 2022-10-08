@@ -166,13 +166,27 @@ const esmConfig = {
 };
 
 /** @type {import('rollup').RollupOptions} */
+const libConfig = {
+  input: inputList.concat('!src/index-lib.ts'),
+  external: externalDeps.concat(externalPeerDeps),
+  plugins: [multiInput()].concat(getPlugins()),
+  output: {
+    banner,
+    dir: 'lib/',
+    format: 'esm',
+    sourcemap: true,
+    chunkFileNames: '_chunks/dep-[hash].js',
+  },
+};
+
+/** @type {import('rollup').RollupOptions} */
 const cjsConfig = {
   input: inputList,
   external: externalDeps.concat(externalPeerDeps),
   plugins: [multiInput()].concat(getPlugins()),
   output: {
     banner,
-    dir: 'lib/',
+    dir: 'cjs/',
     format: 'cjs',
     sourcemap: true,
     exports: 'named',
@@ -183,7 +197,7 @@ const cjsConfig = {
 /** @type {import('rollup').RollupOptions} */
 const umdConfig = {
   input,
-  external: externalPeerDeps,
+  external: externalPeerDeps.concat([/@vue\/composition-api/]),
   plugins: getPlugins({
     env: 'development',
     extractOneCss: true,
@@ -202,7 +216,7 @@ const umdConfig = {
 /** @type {import('rollup').RollupOptions} */
 const umdMinConfig = {
   input,
-  external: externalPeerDeps,
+  external: externalPeerDeps.concat([/@vue\/composition-api/]),
   plugins: getPlugins({
     isProd: true,
     extractOneCss: true,
@@ -219,4 +233,13 @@ const umdMinConfig = {
   },
 };
 
-export default [cssConfig, esConfig, esmConfig, cjsConfig, umdConfig, umdMinConfig];
+// 单独导出 reset.css 到 dist 目录，兼容旧版本样式
+const resetCss = {
+  input: 'src/_common/style/web/_reset.less',
+  output: {
+    file: 'dist/reset.css',
+  },
+  plugins: [postcss({ extract: true })],
+};
+
+export default [cssConfig, esConfig, esmConfig, libConfig, cjsConfig, umdConfig, umdMinConfig, resetCss];

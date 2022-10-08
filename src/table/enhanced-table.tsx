@@ -40,7 +40,7 @@ export default defineComponent({
 
     const treeDataMap = ref(store.value.treeDataMap);
 
-    const { onInnerSelectChange } = useTreeSelect(props, treeDataMap);
+    const { tIndeterminateSelectedRowKeys, onInnerSelectChange } = useTreeSelect(props, treeDataMap);
 
     // 影响列和单元格内容的因素有：树形节点需要添加操作符 [+] [-]
     const getColumns = (columns: PrimaryTableCol<TableRowData>[]) => {
@@ -65,21 +65,24 @@ export default defineComponent({
       return isTreeData ? props.columns : getColumns(props.columns);
     });
 
-    const onDragSortChange = (context: DragSortContext<TableRowData>) => {
-      if (props.beforeDragSort && !props.beforeDragSort(context)) return;
+    const onDragSortChange = (params: DragSortContext<TableRowData>) => {
+      if (props.beforeDragSort && !props.beforeDragSort(params)) return;
       swapData({
-        current: context.current,
-        target: context.target,
-        currentIndex: context.currentIndex,
-        targetIndex: context.targetIndex,
+        current: params.current,
+        target: params.target,
+        currentIndex: params.currentIndex,
+        targetIndex: params.targetIndex,
       });
-      props.onDragSort?.(context);
+      props.onDragSort?.(params);
+      // Vue3 do not need next line
+      context.emit('drag-sort', params);
     };
 
     return {
       store,
       dataSource,
       tColumns,
+      tIndeterminateSelectedRowKeys,
       onDragSortChange,
       onInnerSelectChange,
       ...treeInstanceFunctions,
@@ -104,6 +107,8 @@ export default defineComponent({
       ...this.$props,
       data: this.dataSource,
       columns: this.tColumns,
+      // 半选状态节点
+      indeterminateSelectedRowKeys: this.tIndeterminateSelectedRowKeys,
       // 树形结构不允许本地数据分页
       disableDataPage: Boolean(this.tree && Object.keys(this.tree).length),
     };

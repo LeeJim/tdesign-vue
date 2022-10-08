@@ -1,5 +1,5 @@
 import { computed, SetupContext, toRefs } from '@vue/composition-api';
-import { ChevronRightCircleIcon } from 'tdesign-icons-vue';
+import { ChevronRightCircleIcon as TdChevronRightCircleIcon } from 'tdesign-icons-vue';
 import get from 'lodash/get';
 import { CreateElement } from 'vue';
 import {
@@ -14,16 +14,18 @@ import useClassName from './useClassName';
 import { useTNodeJSX } from '../../hooks/tnode';
 import useDefaultValue from '../../hooks/useDefaultValue';
 import { useConfig } from '../../config-provider/useConfig';
+import { useGlobalIcon } from '../../hooks/useGlobalIcon';
 
 export default function useRowExpand(props: TdPrimaryTableProps, context: SetupContext) {
   const { expandedRowKeys } = toRefs(props);
   const renderTNode = useTNodeJSX();
   const { t, global } = useConfig('table');
+  const { ChevronRightCircleIcon } = useGlobalIcon({ ChevronRightCircleIcon: TdChevronRightCircleIcon });
   const { tableExpandClasses, positiveRotate90, tableFullRowClasses } = useClassName();
   // controlled and uncontrolled
   const [tExpandedRowKeys, setTExpandedRowKeys] = useDefaultValue(
     expandedRowKeys,
-    props.defaultExpandedRowKeys,
+    props.defaultExpandedRowKeys || [],
     props.onExpandChange,
     'expandedRowKeys',
     'expand-change',
@@ -43,6 +45,7 @@ export default function useRowExpand(props: TdPrimaryTableProps, context: SetupC
     index !== -1 ? newKeys.splice(index, 1) : newKeys.push(currentId);
     setTExpandedRowKeys(newKeys, {
       expandedRowData: props.data.filter((t) => newKeys.includes(get(t, props.rowKey || 'id'))),
+      currentRowData: row,
     });
   };
 
@@ -86,7 +89,7 @@ export default function useRowExpand(props: TdPrimaryTableProps, context: SetupC
     p: TableExpandedRowParams<TableRowData> & { tableWidth: number; isWidthOverflow: boolean },
   ) => {
     const rowId = get(p.row, props.rowKey || 'id');
-    if (!tExpandedRowKeys.value.includes(rowId)) return null;
+    if (!tExpandedRowKeys.value || !tExpandedRowKeys.value.includes(rowId)) return null;
     const isFixedLeft = p.isWidthOverflow && props.columns.find((item) => item.fixed === 'left');
     return (
       <tr key={`expand_${rowId}`} class={[tableExpandClasses.row, { [tableFullRowClasses.base]: isFixedLeft }]}>

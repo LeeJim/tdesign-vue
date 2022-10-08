@@ -2,9 +2,15 @@ import isFunction from 'lodash/isFunction';
 import get from 'lodash/get';
 import isObject from 'lodash/isObject';
 import {
-  PrimaryTableCol, RowClassNameParams, TableRowData, TdBaseTableProps,
+  CellData,
+  PrimaryTableCol,
+  RowClassNameParams,
+  TableColumnClassName,
+  TableRowData,
+  TdBaseTableProps,
 } from './type';
 import { ClassName, HTMLElementAttributes } from '../common';
+import { AffixProps } from '../affix';
 
 export function toString(obj: any): string {
   return Object.prototype.toString.call(obj).slice(8, -1).toLowerCase();
@@ -69,12 +75,21 @@ export function formatRowClassNames(
   return customClasses;
 }
 
-export function filterDataByIds(
-  data: Array<object> = [],
-  ids: Array<string | number> = [],
-  byId = 'id',
-): Array<object> {
-  return data.filter((d: Record<string, any> = {}) => ids.includes(d[byId]));
+export function formatClassNames(
+  classNames: TableColumnClassName<TableRowData> | TableColumnClassName<TableRowData>[],
+  params: CellData<TableRowData>,
+) {
+  const classes = classNames instanceof Array ? classNames : [classNames];
+  const arr: any[] = [];
+  for (let i = 0, len = classes.length; i < len; i++) {
+    const cls = classes[i];
+    if (isFunction(cls)) {
+      arr.push(cls(params));
+    } else {
+      arr.push(cls);
+    }
+  }
+  return arr;
 }
 
 export const INNER_PRE_NAME = '@@inner-';
@@ -147,4 +162,46 @@ export function getCurrentRowByKey<T extends { colKey?: string; children?: any[]
       return getCurrentRowByKey(columns[i]?.children, key);
     }
   }
+}
+
+/** 透传 Affix 组件全部特性 */
+export function getAffixProps(mainAffixProps: boolean | AffixProps, subAffixProps?: AffixProps) {
+  if (typeof mainAffixProps === 'object') return mainAffixProps;
+  if (typeof subAffixProps === 'object') return subAffixProps;
+  return {};
+}
+
+export function getEditableKeysMap(keys: Array<string | number>, list: any[], rowKey: string) {
+  const map: { [key: string | number]: boolean } = {};
+  for (let i = 0, len = list.length; i < len; i++) {
+    const rowValue = get(list[i], rowKey);
+    if (keys.includes(rowValue)) {
+      map[rowValue] = true;
+    }
+  }
+  return map;
+}
+
+export function getColumnDataByKey(columns: any[], colKey: string): any {
+  for (let i = 0, len = columns.length; i < len; i++) {
+    if (columns[i].colKey === colKey) return columns[i];
+    if (columns[i].children?.length) {
+      const t = getColumnDataByKey(columns[i].children, colKey);
+      if (t) return t;
+    }
+  }
+  return null;
+}
+
+export function getColumnIndexByKey(columns: any[], colKey: string): number {
+  for (let i = 0, len = columns.length; i < len; i++) {
+    if (columns[i].colKey === colKey) {
+      return i;
+    }
+    if (columns[i].children?.length) {
+      const t = getColumnDataByKey(columns[i].children, colKey);
+      if (t) return i;
+    }
+  }
+  return -1;
 }

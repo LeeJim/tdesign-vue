@@ -4,9 +4,9 @@ import {
 import props from './collapse-panel-props';
 import FakeArrow from '../common-components/fake-arrow';
 import { CollapseValue, TdCollapsePanelProps } from './type';
-import { usePrefixClass } from '../config-provider';
+import { usePrefixClass } from '../hooks/useConfig';
 import useCollapseAnimation from './useCollapseAnimation';
-import { renderTNodeJSX } from '../utils/render-tnode';
+import { renderTNodeJSX, renderContent } from '../utils/render-tnode';
 
 export default defineComponent({
   name: 'TCollapsePanel',
@@ -74,11 +74,15 @@ export default defineComponent({
       ];
       return (
         <div ref={'headRef'} class={cls} onClick={handleClick}>
-          {showExpandIcon && this.expandIconPlacement === 'left' ? renderIcon(this.expandIconPlacement) : null}
-          {renderTNodeJSX(this, 'header')}
+          <div class={`${this.componentName}__header-left`}>
+            {showExpandIcon && this.expandIconPlacement === 'left' ? renderIcon(this.expandIconPlacement) : null}
+          </div>
+          <div class={`${this.componentName}__header-content`}>{renderTNodeJSX(this, 'header')}</div>
           {renderBlank()}
-          {renderTNodeJSX(this, 'headerRightContent')}
-          {showExpandIcon && this.expandIconPlacement === 'right' ? renderIcon(this.expandIconPlacement) : null}
+          <div class={`${this.componentName}__header-right`}>
+            {renderTNodeJSX(this, 'headerRightContent')}
+            {showExpandIcon && this.expandIconPlacement === 'right' ? renderIcon(this.expandIconPlacement) : null}
+          </div>
         </div>
       );
     },
@@ -91,14 +95,14 @@ export default defineComponent({
     renderBodyByNormal() {
       return (
         <div v-show={this.isActive} class={`${this.componentName}__body`}>
-          <div class={`${this.componentName}__content`}>{renderTNodeJSX(this, 'default')}</div>
+          <div class={`${this.componentName}__content`}>{renderContent(this, 'default', 'content')}</div>
         </div>
       );
     },
     renderBodyDestroyOnCollapse() {
       return this.isActive ? (
         <div class={`${this.componentName}__body`}>
-          <div class={`${this.componentName}__content`}>{renderTNodeJSX(this, 'default')}</div>
+          <div class={`${this.componentName}__content`}>{renderContent(this, 'default', 'content')}</div>
         </div>
       ) : null;
     },
