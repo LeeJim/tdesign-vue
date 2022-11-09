@@ -6,7 +6,7 @@ import {
 } from 'tdesign-icons-vue';
 import camelCase from 'lodash/camelCase';
 import kebabCase from 'lodash/kebabCase';
-import { limitUnicodeMaxLength } from '../_common/js/utils/helper';
+import { getUnicodeLength, limitUnicodeMaxLength } from '../_common/js/utils/helper';
 import { InputValue, TdInputProps } from './type';
 import { getCharacterLength, omit } from '../utils/helper';
 import getConfigReceiverMixins, { InputConfig, getGlobalIconMixins } from '../config-provider/config-receiver';
@@ -16,6 +16,7 @@ import { emitEvent } from '../utils/event';
 import props from './props';
 import { renderTNodeJSX } from '../utils/render-tnode';
 import FormItem from '../form/form-item';
+import log from '../_common/js/log';
 
 function getValidAttrs(obj: object): object {
   const newObj = {};
@@ -60,6 +61,7 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
       inputValue: this.value,
       composingRef: false,
       composingRefValue: this.value,
+      resizeObserver: null as ResizeObserver,
     };
   },
   computed: {
@@ -94,7 +96,7 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         {
           [this.commonStatusClassName.disabled]: this.tDisabled,
           [this.commonStatusClassName.focused]: this.focused,
-          [`${this.classPrefix}-is-${this.status}`]: this.status,
+          [`${this.classPrefix}-is-${this.tStatus}`]: this.tStatus,
           [`${this.classPrefix}-align-${this.align}`]: this.align !== 'left',
           [`${this.classPrefix}-is-disabled`]: this.tDisabled,
           [`${this.classPrefix}-is-readonly`]: this.readonly,
@@ -112,7 +114,36 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         },
       ];
     },
+
+    limitNumber(): string {
+      const { maxlength, maxcharacter, value } = this;
+      if (typeof value === 'number') return String(value);
+      if (maxlength && maxcharacter) {
+        log.warn('Input', 'Pick one of maxlength and maxcharacter please.');
+      }
+      if (maxlength) {
+        const length = value?.length ? getUnicodeLength(value) : 0;
+        return `${length}/${maxlength}`;
+      }
+      if (maxcharacter) {
+        return `${getCharacterLength(value || '')}/${maxcharacter}`;
+      }
+      return '';
+    },
+
+    innerStatus(): string {
+      if (this.limitNumber) {
+        const [current, total] = this.limitNumber.split('/');
+        return Number(current) > Number(total) ? 'error' : '';
+      }
+      return '';
+    },
+
+    tStatus(): string {
+      return this.status || this.innerStatus;
+    },
   },
+
   watch: {
     autofocus: {
       handler(val) {
@@ -127,7 +158,7 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
     },
     value: {
       handler(val) {
-        this.inputValue = val;
+        this.inputValue = this.format ? this.format(val) : val;
       },
       immediate: true,
     },
@@ -144,7 +175,24 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
     if (this.autoWidth) {
       this.addListeners();
     }
+    if (this.maxlength || this.maxcharacter) {
+      this.$watch(
+        () => this.innerStatus,
+        () => this.onValidateChange(),
+      );
+    }
+    this.innerStatus && this.onValidateChange();
   },
+
+  mounted() {
+    this.addTableResizeObserver(this.$refs.inputPreRef as Element);
+  },
+
+  beforeDestroy() {
+    this.resizeObserver?.unobserve(this.$refs.inputPreRef as Element);
+    this.resizeObserver?.disconnect();
+  },
+
   methods: {
     addListeners() {
       this.$watch(
@@ -157,6 +205,15 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         },
         { immediate: true },
       );
+    },
+    // 当元素默认为 display: none 状态，无法提前准确计算宽度，因此需要监听元素宽度变化。比如：Tabs 场景切换。
+    addTableResizeObserver(element: Element) {
+      // IE 11 以下使用设置 minWidth 兼容；IE 11 以上使用 ResizeObserver
+      if (typeof window.ResizeObserver === 'undefined' || !element) return;
+      this.resizeObserver = new window.ResizeObserver(() => {
+        this.updateInputWidth();
+      });
+      this.resizeObserver.observe(element);
     },
     mouseEvent(v: boolean) {
       this.isHover = v;
@@ -286,10 +343,8 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
       if (this.composingRef) {
         this.composingRefValue = val;
       } else {
-        val = limitUnicodeMaxLength(val, this.maxlength);
-        if (this.maxcharacter && this.maxcharacter >= 0) {
-          const stringInfo = getCharacterLength(val, this.maxcharacter);
-          val = typeof stringInfo === 'object' && stringInfo.characters;
+        if (this.type !== 'number') {
+          val = this.getValueByLimitNumber(val);
         }
         emitEvent<Parameters<TdInputProps['onChange']>>(this, 'change', val, { e } as { e: MouseEvent | InputEvent });
         // 受控，重要，勿删
@@ -317,6 +372,27 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         (this.$refs.inputRef as HTMLInputElement).style.width = `${width}px`;
       }
     },
+
+    getValueByLimitNumber(inputValue: string) {
+      const { allowInputOverMax, maxlength, maxcharacter } = this;
+      if (!(maxlength || maxcharacter) || allowInputOverMax || !inputValue) return inputValue;
+      if (maxlength) {
+        // input value could be unicode 😊
+        return limitUnicodeMaxLength(inputValue, maxlength);
+      }
+      if (maxcharacter) {
+        const r = getCharacterLength(inputValue, maxcharacter);
+        if (typeof r === 'object') {
+          return r.characters;
+        }
+      }
+    },
+
+    onValidateChange() {
+      const error = this.innerStatus ? 'exceed-maximum' : undefined;
+      this.onValidate?.({ error });
+      this.$emit('validate', { error });
+    },
   },
 
   render(h: CreateElement): VNode {
@@ -341,9 +417,17 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
 
     const label = renderTNodeJSX(this, 'label');
     const suffix = renderTNodeJSX(this, 'suffix');
+    const limitNode = this.limitNumber && this.showLimitNumber ? (
+        <div class={`${this.classPrefix}-input__limit-number`}>{this.limitNumber}</div>
+    ) : null;
 
     const labelContent = label ? <div class={`${this.componentName}__prefix`}>{label}</div> : null;
-    const suffixContent = suffix ? <div class={`${this.componentName}__suffix`}>{suffix}</div> : null;
+    const suffixContent = suffix || limitNode ? (
+        <div class={`${this.componentName}__suffix`}>
+          {suffix}
+          {limitNode}
+        </div>
+    ) : null;
 
     const { BrowseIcon, BrowseOffIcon, CloseCircleFilledIcon } = this.useGlobalIcon({
       BrowseIcon: TdBrowseIcon,
@@ -440,7 +524,11 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
     return (
       <div class={this.inputWrapClass}>
         {inputNode}
-        {tips && <div class={`${this.componentName}__tips ${this.componentName}__tips--${this.status}`}>{tips}</div>}
+        {tips && (
+          <div class={`${this.componentName}__tips ${this.componentName}__tips--${this.tStatus || 'default'}`}>
+            {tips}
+          </div>
+        )}
       </div>
     );
   },

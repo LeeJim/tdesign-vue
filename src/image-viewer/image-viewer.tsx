@@ -4,6 +4,7 @@ import {
 import { ChevronLeftIcon, ChevronDownIcon, CloseIcon } from 'tdesign-icons-vue';
 
 import props from './props';
+import Container from './base/Container';
 import TImageViewerIcon from './base/ImageModalIcon';
 import TImageViewerUtils from './base/ImageViewerUtils';
 import TImageItem from './base/ImageItem';
@@ -11,8 +12,8 @@ import TImageViewerModal from './base/ImageViewerModal';
 import useVModel from '../hooks/useVModel';
 import useDefaultValue from '../hooks/useDefaultValue';
 import { usePrefixClass } from '../hooks/useConfig';
-import TransferDom from '../utils/transfer-dom';
 import { renderTNodeJSX } from '../utils/render-tnode';
+import { setTransform } from '../utils/helper';
 
 import { TdImageViewerProps } from './type';
 import { useMirror, useRotate, useScale } from './hooks';
@@ -22,9 +23,6 @@ import { EVENT_CODE } from './const';
 export default defineComponent({
   name: 'TImageViewer',
   props: { ...props },
-  directives: {
-    TransferDom,
-  },
   model: {
     prop: 'visible',
     event: 'change',
@@ -58,7 +56,7 @@ export default defineComponent({
         [`${classPrefix.value}-is-show`]: isExpand.value,
       },
     ]);
-    const zIndexValue = computed(() => props.zIndex ?? 2000);
+    const zIndexValue = computed(() => props.zIndex ?? 2600);
     const toggleExpand = () => {
       isExpand.value = !isExpand.value;
     };
@@ -131,14 +129,28 @@ export default defineComponent({
       }
     };
 
+    const containerRef = ref();
+    const mountContent = () => {
+      if (containerRef) {
+        containerRef.value.mountContent();
+      }
+    };
+    const unmountContent = () => {
+      if (containerRef) {
+        containerRef.value.unmountContent();
+      }
+    };
+
     watch(
       () => visibleValue.value,
       (val) => {
         if (val) {
           window.addEventListener('keydown', keydownHandler);
+          mountContent();
           return;
         }
         window.removeEventListener('keydown', keydownHandler);
+        unmountContent();
       },
     );
 
@@ -152,7 +164,7 @@ export default defineComponent({
       deltaY > 0 ? onZoomIn() : onZoomOut();
     };
 
-    const transStyle = computed(() => ({ transform: `translateX(-${indexValue.value * 84}px)` }));
+    const transStyle = computed(() => setTransform(`translateX(-${indexValue.value * 84}px)`));
     const isMultipleImg = computed(() => imagesList.value.length > 1);
 
     return {
@@ -186,6 +198,7 @@ export default defineComponent({
       closeBtnAction,
       scale,
       isMultipleImg,
+      containerRef,
     };
   },
   methods: {
@@ -194,7 +207,7 @@ export default defineComponent({
         <div class={this.headerClass}>
           <TImageViewerIcon
             icon={() => <ChevronDownIcon size="20px" />}
-            class={`${this.COMPONENT_NAME}__header-pre__bt`}
+            class={`${this.COMPONENT_NAME}__header-pre-bt`}
             clickHandler={this.toggleExpand}
           />
           <div class={`${this.COMPONENT_NAME}__header-prev`}>
@@ -229,7 +242,7 @@ export default defineComponent({
       const icon = renderTNodeJSX(
         this,
         'navigationArrow',
-        <ChevronLeftIcon style={{ transform: `rotate(${rotateDeg}deg)` }} size="24px" />,
+        <ChevronLeftIcon style={setTransform(`rotate(${rotateDeg}deg)`)} size="24px" />,
       );
 
       return (
@@ -240,77 +253,76 @@ export default defineComponent({
         />
       );
     },
-  },
-  render() {
-    if (this.mode === 'modeless') {
+    renderModal() {
       return (
-        <div class={this.rootClass} style={{ display: 'inline-block' }}>
-          {renderTNodeJSX(this, 'trigger', { params: { open: this.openHandler } })}
-          <TImageViewerModal
-            zIndex={this.zIndexValue}
-            visible={this.visibleValue}
-            index={this.indexValue}
-            images={this.imagesList}
-            scale={this.scale}
-            rotate={this.rotate}
-            mirror={this.mirror}
-            currentImage={this.currentImage}
-            rotateHandler={this.onRotate}
+        <TImageViewerModal
+          zIndex={this.zIndexValue}
+          visible={this.visibleValue}
+          index={this.indexValue}
+          images={this.imagesList}
+          scale={this.scale}
+          rotate={this.rotate}
+          mirror={this.mirror}
+          currentImage={this.currentImage}
+          rotateHandler={this.onRotate}
+          zoomInHandler={this.onZoomIn}
+          zoomOutHandler={this.onZoomOut}
+          mirrorHandler={this.onMirror}
+          resetHandler={this.onRest}
+          closeHandler={this.onCloseHandle}
+          draggable={this.draggable}
+          showOverlay={this.showOverlayValue}
+          closeBtn={this.closeBtn}
+        />
+      );
+    },
+    renderViewer() {
+      return (
+        <div class={this.wrapClass} style={{ zIndex: this.zIndexValue }} onWheel={this.onWheel}>
+          {!!this.showOverlayValue && (
+            <div class={`${this.COMPONENT_NAME}__modal-mask`} onClick={this.clickOverlayHandler} />
+          )}
+          {this.isMultipleImg && this.renderHeader()}
+          {this.isMultipleImg && this.renderNavigationArrow('prev')}
+          {this.isMultipleImg && this.renderNavigationArrow('next')}
+          {this.isMultipleImg && (
+            <div class={`${this.COMPONENT_NAME}__modal-index`}>
+              {renderTNodeJSX(this, 'title')}
+              {`${this.indexValue + 1}/${this.imagesList.length}`}
+            </div>
+          )}
+          <div
+            class={[`${this.COMPONENT_NAME}__modal-icon`, `${this.COMPONENT_NAME}__modal-close-bt`]}
+            onClick={this.closeBtnAction}
+          >
+            {renderTNodeJSX(this, 'closeBtn', <CloseIcon size="24px" />)}
+          </div>
+          <TImageViewerUtils
             zoomInHandler={this.onZoomIn}
             zoomOutHandler={this.onZoomOut}
             mirrorHandler={this.onMirror}
             resetHandler={this.onRest}
-            closeHandler={this.onCloseHandle}
-            draggable={this.draggable}
-            showOverlay={this.showOverlayValue}
-            closeBtn={this.closeBtn}
+            rotateHandler={this.onRotate}
+            scale={this.scale}
+            currentImage={this.currentImage}
+          />
+          <TImageItem
+            scale={this.scale}
+            rotate={this.rotate}
+            mirror={this.mirror}
+            src={this.currentImage.mainImage}
+            placementSrc={this.currentImage.thumbnail}
           />
         </div>
       );
-    }
+    },
+  },
 
+  render() {
     return (
-      <div class={this.rootClass} style={{ display: 'inline-block' }}>
+      <Container ref="containerRef" mode={this.mode} renderModal={this.renderModal} renderViewer={this.renderViewer}>
         {renderTNodeJSX(this, 'trigger', { params: { open: this.openHandler } })}
-        {this.visibleValue && (
-          <div class={this.wrapClass} v-transfer-dom="body" style={{ zIndex: this.zIndexValue }} onWheel={this.onWheel}>
-            {!!this.showOverlayValue && (
-              <div class={`${this.COMPONENT_NAME}__modal-mask`} onClick={this.clickOverlayHandler} />
-            )}
-            {this.isMultipleImg && this.renderHeader()}
-            {this.isMultipleImg && this.renderNavigationArrow('prev')}
-            {this.isMultipleImg && this.renderNavigationArrow('next')}
-            {this.isMultipleImg && (
-              <div class={`${this.COMPONENT_NAME}__modal-index`}>
-                {renderTNodeJSX(this, 'title')}
-                {`${this.indexValue + 1}/${this.imagesList.length}`}
-              </div>
-            )}
-            <div
-              class={[`${this.COMPONENT_NAME}__modal-icon`, `${this.COMPONENT_NAME}__modal-close-bt`]}
-              onClick={this.closeBtnAction}
-            >
-              {renderTNodeJSX(this, 'closeBtn', <CloseIcon size="24px" />)}
-            </div>
-            <TImageViewerUtils
-              zoomInHandler={this.onZoomIn}
-              zoomOutHandler={this.onZoomOut}
-              mirrorHandler={this.onMirror}
-              resetHandler={this.onRest}
-              rotateHandler={this.onRotate}
-              scale={this.scale}
-              currentImage={this.currentImage}
-            />
-            <TImageItem
-              scale={this.scale}
-              rotate={this.rotate}
-              mirror={this.mirror}
-              src={this.currentImage.mainImage}
-              placementSrc={this.currentImage.thumbnail}
-            />
-          </div>
-        )}
-      </div>
+      </Container>
     );
   },
 });

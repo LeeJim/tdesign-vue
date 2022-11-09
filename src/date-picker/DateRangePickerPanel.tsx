@@ -113,6 +113,7 @@ export default defineComponent({
         onChange?.(
           formatDate(nextValue, {
             format: formatRef.value.format,
+            autoSwap: true,
           }) as DateValue[],
           {
             dayjsValue: nextValue.map((v) => parseToDayjs(v, formatRef.value.format)),
@@ -254,6 +255,7 @@ export default defineComponent({
         onChange?.(
           formatDate(nextValue, {
             format: formatRef.value.format,
+            autoSwap: true,
           }) as DateValue[],
           {
             dayjsValue: nextValue.map((v) => parseToDayjs(v, formatRef.value.format)),
@@ -283,6 +285,7 @@ export default defineComponent({
         onChange?.(
           formatDate(presetValue, {
             format: formatRef.value.format,
+            autoSwap: true,
           }) as DateValue[],
           {
             dayjsValue: presetValue.map((p) => parseToDayjs(p, formatRef.value.format)),
@@ -353,7 +356,9 @@ export default defineComponent({
 
     const panelProps = computed(() => ({
       hoverValue: (isHoverCell.value ? hoverValue.value : []) as string[],
-      value: (isSelected.value ? cacheValue.value : value.value) as string[],
+      value: (isSelected.value
+        ? formatDate(cacheValue.value, { format: formatRef.value.format })
+        : value.value) as string[],
       activeIndex: activeIndex.value,
       year: year.value,
       month: month.value,

@@ -14,6 +14,7 @@ import props from './props';
 
 import TSelectInput from '../select-input';
 import TSinglePanel from './panel/SinglePanel';
+import useFormDisabled from '../hooks/useFormDisabled';
 
 export default defineComponent({
   name: 'TDatePicker',
@@ -43,6 +44,9 @@ export default defineComponent({
       valueType: props.valueType,
       enableTimePicker: props.enableTimePicker,
     }));
+
+    const { formDisabled } = useFormDisabled();
+    const isDisabled = computed(() => formDisabled.value || props.disabled);
 
     watch(popupVisible, (visible) => {
       cacheValue.value = formatDate(value.value, {
@@ -157,6 +161,9 @@ export default defineComponent({
       inputValue.value = formatDate(nextDate, {
         format: formatRef.value.format,
       });
+      cacheValue.value = formatDate(nextDate, {
+        format: formatRef.value.format,
+      });
 
       props.onPick?.(nextDate);
     }
@@ -242,6 +249,7 @@ export default defineComponent({
       datePickerInputProps,
       popupVisible,
       panelProps,
+      isDisabled,
       CalendarIcon,
     };
   },
@@ -253,6 +261,7 @@ export default defineComponent({
       datePickerInputProps,
       popupVisible,
       panelProps,
+      isDisabled,
       CalendarIcon,
     } = this;
 
@@ -267,7 +276,7 @@ export default defineComponent({
     return (
       <div class={COMPONENT_NAME}>
         <TSelectInput
-          disabled={this.disabled}
+          disabled={isDisabled}
           value={inputValue}
           status={this.status}
           tips={this.tips}
