@@ -1,4 +1,4 @@
-import { ref, computed, watchEffect } from '@vue/composition-api';
+import { ref, computed, watch } from '@vue/composition-api';
 import dayjs from 'dayjs';
 import { usePrefixClass, useConfig } from '../../hooks/useConfig';
 
@@ -31,7 +31,7 @@ export default function useRange(props: TdDateRangePickerProps, { emit }: any) {
   const popupVisible = ref(false);
   const isHoverCell = ref(false);
   const activeIndex = ref(0); // 确定当前选中的输入框序号
-  const inputValue = ref(formatDate(props.value, { format: formatRef.value.format })); // 未真正选中前可能不断变更输入框的内容
+  const inputValue = ref(formatDate(value.value, { format: formatRef.value.format })); // 未真正选中前可能不断变更输入框的内容
 
   // input 设置
   const rangeInputProps = computed(() => ({
@@ -40,7 +40,7 @@ export default function useRange(props: TdDateRangePickerProps, { emit }: any) {
     clearable: props.clearable,
     prefixIcon: props.prefixIcon,
     readonly: !props.allowInput,
-    separator: props.separator,
+    separator: props.separator || global.value.rangeSeparator,
     placeholder: props.placeholder || global.value.placeholder[props.mode],
     activeIndex: popupVisible.value ? activeIndex.value : undefined,
     class: {
@@ -69,6 +69,7 @@ export default function useRange(props: TdDateRangePickerProps, { emit }: any) {
 
       // 跳过不符合格式化的输入框内容
       if (!isValidDate(newVal, formatRef.value.format)) return;
+      cacheValue.value = newVal;
       const newYear: Array<number> = [];
       const newMonth: Array<number> = [];
       const newTime: Array<string> = [];
@@ -129,26 +130,30 @@ export default function useRange(props: TdDateRangePickerProps, { emit }: any) {
   }));
 
   // 输入框响应 value 变化
-  watchEffect(() => {
-    if (!value.value) {
-      inputValue.value = [];
-      return;
-    }
-    if (!isValidDate(value.value, formatRef.value.format)) return;
+  watch(
+    value,
+    (value) => {
+      if (!value) {
+        inputValue.value = [];
+        return;
+      }
+      if (!isValidDate(value, formatRef.value.format)) return;
 
-    inputValue.value = formatDate(value.value, {
-      format: formatRef.value.format,
-    });
-  });
+      inputValue.value = formatDate(value, {
+        format: formatRef.value.format,
+      });
+    },
+    { immediate: true },
+  );
 
   // activeIndex 变化自动 focus 对应输入框
-  watchEffect(() => {
+  watch(activeIndex, (index) => {
     if (!isMountedRef.value) {
       isMountedRef.value = true;
       return;
     }
     const indexMap = { 0: 'first', 1: 'second' };
-    inputRef.value?.focus?.({ position: indexMap[activeIndex.value] });
+    inputRef.value?.focus?.({ position: indexMap[index] });
   });
 
   return {

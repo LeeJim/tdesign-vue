@@ -2,7 +2,6 @@ import {
   computed,
   defineComponent,
   ref,
-  SetupContext,
   toRefs,
   watch,
   nextTick,
@@ -20,7 +19,7 @@ import useVModel from '../hooks/useVModel';
 import { useTNodeJSX } from '../hooks/tnode';
 import { useConfig, usePrefixClass } from '../config-provider/useConfig';
 import {
-  TdSelectProps, SelectValue, TdOptionProps, SelectOptionGroup, SelectValueChangeTrigger,
+  TdSelectProps, SelectValue, TdOptionProps, SelectValueChangeTrigger,
 } from './type';
 import props from './props';
 import TLoading from '../loading';
@@ -36,7 +35,13 @@ import FakeArrow from '../common-components/fake-arrow';
 import { off, on } from '../utils/dom';
 import Option from './option';
 import SelectPanel from './select-panel';
-import { getSingleContent, getMultipleContent, getNewMultipleValue } from './util';
+import {
+  getSingleContent,
+  getMultipleContent,
+  getNewMultipleValue,
+  flattenOptions,
+  getAllSelectableOption,
+} from './util';
 import useSelectOptions from './hooks/useSelectOptions';
 import { SelectPanelInstance } from './instance';
 import log from '../_common/js/log';
@@ -56,11 +61,11 @@ export default defineComponent({
     FakeArrow,
     SelectPanel,
   },
-  setup(props: TdSelectProps, context: SetupContext) {
+  setup(props: TdSelectProps) {
     const { t, global } = useConfig('select');
     const renderTNode = useTNodeJSX();
     const instance = getCurrentInstance();
-    const selectInputRef = ref<HTMLElement>(null);
+    const selectInputRef = ref(null);
     const selectPanelRef = ref<SelectPanelInstance>();
     const popupOpenTime = ref(250);
     const { formDisabled } = useFormDisabled();
@@ -138,7 +143,8 @@ export default defineComponent({
       // 若为多选情况，将历史 value 加入 option 待取列表，兼容远程搜索改变 options 数组后旧选项无法找到的问题
       const oldValueMap = new Map<SelectValue, TdOptionProps>();
       if (multiple.value) {
-        (value.value as TdOptionProps[]).forEach((option) => {
+        const mapValue = value.value || [];
+        (mapValue as TdOptionProps[]).forEach?.((option) => {
           oldValueMap.set(option[valueOfKeys], option);
         });
       }
@@ -205,6 +211,9 @@ export default defineComponent({
     const isReachMaxLimit = computed(
       () => multiple.value && max.value !== 0 && max.value <= (innerValue.value as SelectValue[]).length,
     );
+    const isAllOptionsChecked = computed(
+      () => getAllSelectableOption(optionsList.value).length === (innerValue.value as SelectValue[]).length,
+    );
 
     const placeholderText = computed(
       () => ((!multiple.value
@@ -235,10 +244,17 @@ export default defineComponent({
           label: optionsMap.value.get(value)?.label,
         }))
         : innerValue.value;
-      return {
+      const params = {
         value: val,
         onClose: multiple.value ? (index: number) => removeTag(index) : () => {},
       };
+      if (minCollapsedNum.value && multiple.value) {
+        return {
+          ...params,
+          displayValue: val?.slice?.(0, minCollapsedNum.value),
+        };
+      }
+      return params;
     });
 
     const collapsedItemsParams = computed(() => multiple.value
@@ -266,6 +282,18 @@ export default defineComponent({
       };
       instance.emit('remove', evtObj);
       props.onRemove?.(evtObj);
+    };
+
+    // 全选点击回调，t-option 的事件调用到这里处理
+    const handleCheckAllClick = (e: MouseEvent | KeyboardEvent) => {
+      setInnerValue(
+        isAllOptionsChecked.value
+          ? []
+          : getAllSelectableOption(optionsList.value)
+            .map((option) => option.value)
+            .slice(0, max.value || Infinity),
+        { e, trigger: isAllOptionsChecked.value ? 'uncheck' : 'check' },
+      );
     };
 
     const handleCreate = () => {
@@ -317,8 +345,6 @@ export default defineComponent({
     const handleEnter = (value: string, context: { e: KeyboardEvent }) => {
       instance.emit('enter', { value, e: context?.e, inputValue: tInputValue.value });
       props.onEnter?.({ value, e: context?.e, inputValue: tInputValue.value.toString() });
-      // 当支持创建的时候，按下 enter 键，若 hoverIndex 大于 0，则视为选择列表中筛选出的已有项目，只有当 hoverIndex 为 -1(未选中)/0(创建条目) 的时候，才视为触发 create 回调
-      creatable.value && hoverIndex.value < 1 && handleCreate();
     };
 
     const debounceSearch = debounce(() => {
@@ -329,7 +355,7 @@ export default defineComponent({
     const getOverlayElm = (): HTMLElement => {
       let r;
       try {
-        const popupRefs = (context.refs.selectInputRef as any).$refs.selectInputRef.$refs;
+        const popupRefs = selectInputRef.value.$refs.selectInputPopupRef.$refs;
         r = popupRefs.overlay || popupRefs.component.$refs.overlay;
       } catch (e) {
         log.warn('Select', e);
@@ -362,18 +388,9 @@ export default defineComponent({
     // 键盘操作逻辑相关
     const hoverIndex = ref(-1);
     const keydownEvent = (e: KeyboardEvent) => {
-      const displayOptions: (TdOptionProps & { isCreated?: boolean })[] = [];
-
-      const getCurrentOptionsList = (options: TdOptionProps[]) => {
-        options.forEach((option) => {
-          if ((option as SelectOptionGroup).group) {
-            getCurrentOptionsList((option as SelectOptionGroup).children);
-          } else {
-            displayOptions.push(option);
-          }
-        });
-      };
-      getCurrentOptionsList(selectPanelRef.value?.getDisplayOptions());
+      const displayOptions: (TdOptionProps & { isCreated?: boolean })[] = flattenOptions(
+        selectPanelRef.value?.getDisplayOptions(),
+      );
 
       const displayOptionsLength = displayOptions.length;
       const arrowDownOption = () => {
@@ -439,27 +456,27 @@ export default defineComponent({
           }
           break;
         case 'Enter':
-          if (hoverIndex.value === -1) return;
-          if (displayOptions[hoverIndex.value].isCreated && multiple.value) {
+          // 当支持创建、且 hoverIndex 为 -1(未选中)/0(创建条目)、第一项为创建项的时候，才视为触发 create 回调，并继续键盘事件
+          if (creatable.value && hoverIndex.value < 1 && displayOptions?.[0]?.isCreated) {
             handleCreate();
+          } else if (hoverIndex.value === -1) {
+            // 否则视为选择列表中筛选出的已有项目
+            // 当 hoverIndex 为 -1，即未选中任意项的时候，不触发其他键盘事件
+            return;
           }
-          if (!multiple.value) {
-            const optionValue = (displayOptions[hoverIndex.value] as TdOptionProps).value;
-            setInnerValue(
-              optionValue,
-              {
-                e,
-                trigger: 'check',
-              },
-              optionValue,
-            );
-            setInnerPopupVisible(false, { e });
+          // enter 选中逻辑
+          if (multiple.value && (displayOptions[hoverIndex.value] as TdOptionProps).checkAll) {
+            handleCheckAllClick(e);
           } else {
-            if (hoverIndex.value === -1) return;
             const optionValue = (displayOptions[hoverIndex.value] as TdOptionProps)?.value;
             if (!optionValue) return;
-            const newValue = getNewMultipleValue(innerValue.value, optionValue);
-            setInnerValue(newValue.value, { e, trigger: newValue.isCheck ? 'check' : 'uncheck' }, optionValue);
+            if (!multiple.value) {
+              setInnerValue(optionValue, { e, trigger: 'check' }, optionValue);
+              setInnerPopupVisible(false, { e });
+            } else {
+              const newValue = getNewMultipleValue(innerValue.value, optionValue);
+              setInnerValue(newValue.value, { e, trigger: newValue.isCheck ? 'check' : 'uncheck' }, optionValue);
+            }
           }
           break;
         case 'Escape':
@@ -499,7 +516,9 @@ export default defineComponent({
       selectValue: innerValue,
       reserveKeyword,
       isReachMaxLimit,
+      isAllOptionsChecked,
       getOverlayElm,
+      handleCheckAllClick,
       handleCreate,
       handleValueChange: setInnerValue,
       handlerInputChange: setTInputValue,
@@ -555,10 +574,6 @@ export default defineComponent({
   render() {
     const { renderTNode } = this;
 
-    const prefixIcon = () => renderTNode('prefixIcon');
-    const valueDisplay = () => renderTNode('valueDisplay', { params: this.valueDisplayParams });
-    const collapsedItems = () => renderTNode('collapsedItems', { params: this.collapsedItemsParams });
-
     const { overlayClassName, ...restPopupProps } = this.popupProps || {};
 
     return (
@@ -566,69 +581,73 @@ export default defineComponent({
         <SelectInput
           ref="selectInputRef"
           class={this.componentName}
-          autoWidth={this.autoWidth}
-          borderless={this.borderless}
-          readonly={this.readonly}
-          allowInput={this.isFilterable}
-          multiple={this.multiple}
-          keys={this.keys}
-          status={this.status}
-          tips={this.tips}
-          value={this.displayText}
-          valueDisplay={valueDisplay}
-          clearable={this.clearable}
-          disabled={this.isDisabled}
-          label={prefixIcon}
-          suffixIcon={this.renderSuffixIcon}
-          placeholder={this.placeholderText}
-          inputValue={this.tInputValue}
-          inputProps={{
-            size: this.size,
-            ...this.inputProps,
+          {...{
+            props: {
+              autoWidth: this.autoWidth,
+              borderless: this.borderless,
+              readonly: this.readonly,
+              allowInput: this.isFilterable,
+              multiple: this.multiple,
+              keys: this.keys,
+              status: this.status,
+              tips: this.tips,
+              value: this.displayText,
+              valueDisplay: () => renderTNode('valueDisplay', { params: this.valueDisplayParams }),
+              clearable: this.clearable,
+              disabled: this.disabled,
+              label: () => renderTNode('prefixIcon'),
+              suffixIcon: this.renderSuffixIcon,
+              placeholder: this.placeholderText,
+              inputValue: this.tInputValue,
+              inputProps: {
+                size: this.size,
+                ...this.inputProps,
+              },
+              tagInputProps: {
+                autoWidth: true,
+                ...this.tagInputProps,
+              },
+              tagProps: this.tagProps,
+              minCollapsedNum: this.minCollapsedNum,
+              collapsedItems: () => renderTNode('collapsedItems', { params: this.collapsedItemsParams }),
+              popupVisible: this.innerPopupVisible,
+              popupProps: {
+                overlayClassName: [`${this.componentName}__dropdown`, overlayClassName],
+                ...restPopupProps,
+              },
+              updateScrollTop: this.updateScrollTop,
+              ...this.selectInputProps,
+              panel: () => (
+                <select-panel
+                  ref="selectPanelRef"
+                  scopedSlots={this.$scopedSlots}
+                  size={this.size}
+                  options={this.innerOptions}
+                  inputValue={this.tInputValue}
+                  multiple={this.multiple}
+                  empty={this.empty}
+                  filter={this.filter}
+                  filterable={this.isFilterable}
+                  creatable={this.creatable}
+                  scroll={this.scroll}
+                  loading={this.isLoading}
+                  loadingText={this.loadingText}
+                  panelTopContent={this.panelTopContent}
+                  panelBottomContent={this.panelBottomContent}
+                />
+              ),
+            },
+            on: {
+              focus: this.handleFocus,
+              blur: this.handleBlur,
+              enter: this.handleEnter,
+              clear: this.handleClear,
+              'input-change': this.handleTInputValueChange,
+              'popup-visible-change': this.setInnerPopupVisible,
+              'tag-change': this.handleTagChange,
+            },
           }}
-          tagInputProps={{
-            autoWidth: true,
-            ...this.tagInputProps,
-          }}
-          tagProps={this.tagProps}
-          minCollapsedNum={this.minCollapsedNum}
-          collapsedItems={collapsedItems}
-          popupVisible={this.innerPopupVisible}
-          popupProps={{
-            overlayClassName: [`${this.componentName}__dropdown`, overlayClassName],
-            ...restPopupProps,
-          }}
-          on={{
-            focus: this.handleFocus,
-            blur: this.handleBlur,
-            enter: this.handleEnter,
-            clear: this.handleClear,
-            'input-change': this.handleTInputValueChange,
-            'popup-visible-change': this.setInnerPopupVisible,
-            'tag-change': this.handleTagChange,
-          }}
-          {...this.selectInputProps}
-          updateScrollTop={this.updateScrollTop}
-        >
-          <select-panel
-            ref="selectPanelRef"
-            slot="panel"
-            scopedSlots={this.$scopedSlots}
-            size={this.size}
-            options={this.innerOptions}
-            inputValue={this.tInputValue}
-            multiple={this.multiple}
-            empty={this.empty}
-            filter={this.filter}
-            filterable={this.isFilterable}
-            creatable={this.creatable}
-            scroll={this.scroll}
-            loading={this.isLoading}
-            loadingText={this.loadingText}
-            panelTopContent={this.panelTopContent}
-            panelBottomContent={this.panelBottomContent}
-          />
-        </SelectInput>
+        />
       </div>
     );
   },

@@ -16,6 +16,11 @@ export default {
       return ['left', 'center', 'right'].includes(val);
     },
   },
+  /** 是否允许输入超过 `max` `min` 范围外的数字。为保障用户体验，仅在失去焦点时进行数字范围矫正。默认允许超出，数字超出范围时，输入框变红提醒 */
+  allowInputOverLimit: {
+    type: Boolean,
+    default: true,
+  },
   /** 宽度随内容自适应 */
   autoWidth: Boolean,
   /** [小数位数](https://en.wiktionary.org/wiki/decimal_place) */
@@ -68,6 +73,7 @@ export default {
   /** 文本框状态 */
   status: {
     type: String as PropType<TdInputNumberProps['status']>,
+    default: 'default' as TdInputNumberProps['status'],
     validator(val: TdInputNumberProps['status']): boolean {
       if (!val) return true;
       return ['default', 'success', 'warning', 'error'].includes(val);
@@ -106,7 +112,7 @@ export default {
   },
   /** 失去焦点时触发 */
   onBlur: Function as PropType<TdInputNumberProps['onBlur']>,
-  /** 值变化时触发 */
+  /** 值变化时触发，`type` 表示触发本次变化的来源 */
   onChange: Function as PropType<TdInputNumberProps['onChange']>,
   /** 回车键按下时触发 */
   onEnter: Function as PropType<TdInputNumberProps['onEnter']>,

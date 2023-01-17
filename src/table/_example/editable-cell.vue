@@ -2,6 +2,7 @@
   <div>
     <!-- 当前示例包含：输入框、单选、多选、日期 等场景 -->
     <t-table
+      ref="tableRef"
       row-key="key"
       :columns="columns"
       :data="data"
@@ -9,6 +10,8 @@
       bordered
       @row-validate="onRowValidate"
     />
+    <!-- 示例代码有效，勿删 -->
+    <!-- <t-button @click="validateTableData">校验</t-button> -->
   </div>
 </template>
 
@@ -20,8 +23,8 @@ import dayjs from 'dayjs';
 
 const initData = new Array(5).fill(null).map((_, i) => ({
   key: String(i + 1),
-  firstName: ['Eric', 'Gilberta', 'Heriberto', 'Lazarus', 'Zandra'][i % 4],
-  framework: ['Vue', 'React', 'Miniprogram', 'Flutter'][i % 4],
+  firstName: ['贾明', '张三', '王芳'][i % 3],
+  status: i % 3,
   email: [
     'espinke0@apache.org',
     'gpurves1@issuu.com',
@@ -29,15 +32,16 @@ const initData = new Array(5).fill(null).map((_, i) => ({
     'lskures3@apache.org',
     'zcroson5@virginia.edu',
   ][i % 4],
-  letters: [['A'], ['B', 'E'], ['C'], ['D', 'G', 'H']][i % 4],
-  createTime: ['2021-11-01', '2021-12-01', '2022-01-01', '2022-02-01', '2022-03-01'][i % 4],
+  letters: [['宣传物料制作费用'], ['宣传物料制作费用'], ['宣传物料制作费用'], ['宣传物料制作费用', 'algolia 服务报销']][
+    i % 4
+  ],
+  createTime: ['2022-01-01', '2022-02-01', '2022-03-01', '2022-04-01', '2022-05-01'][i % 4],
 }));
 
-const FRAMEWORK_OPTIONS = [
-  { label: 'Vue Framework', value: 'Vue' },
-  { label: 'React Framework', value: 'React' },
-  { label: 'Miniprogram Framework', value: 'Miniprogram' },
-  { label: 'Flutter Framework', value: 'Flutter' },
+const STATUS_OPTIONS = [
+  { label: '审批通过', value: 0 },
+  { label: '审批过期', value: 1 },
+  { label: '审批失败', value: 2 },
 ];
 
 export default {
@@ -54,7 +58,7 @@ export default {
     columns() {
       return [
         {
-          title: 'FirstName',
+          title: '申请人',
           colKey: 'firstName',
           align: this.align,
           // 编辑状态相关配置，全部集中在 edit
@@ -62,11 +66,17 @@ export default {
             // 1. 支持任意组件。需保证组件包含 `value` 和 `onChange` 两个属性，且 onChange 的第一个参数值为 new value。
             // 2. 如果希望支持校验，组件还需包含 `status` 和 `tips` 属性。具体 API 含义参考 Input 组件
             component: Input,
-            // props, 透传全部属性到 Input 组件
+            // props, 透传全部属性到 Input 组件（可以是一个函数，不同行有不同的 props 属性 时，使用 Function）
             props: {
               clearable: true,
               autofocus: true,
             },
+            // 透传给 component: Input 的事件
+            on: (editContext) => ({
+              blur: () => {
+                console.log('失去焦点', editContext);
+              },
+            }),
             // 除了点击非自身元素退出编辑态之外，还有哪些事件退出编辑态
             abortEditOnEvent: ['onEnter'],
             // 编辑完成，退出编辑态后触发
@@ -85,15 +95,15 @@ export default {
           },
         },
         {
-          title: 'Framework',
-          colKey: 'framework',
-          cell: (h, { row }) => FRAMEWORK_OPTIONS.find((t) => t.value === row.framework)?.label,
+          title: '申请状态',
+          colKey: 'status',
+          cell: (h, { row }) => STATUS_OPTIONS.find((t) => t.value === row.status)?.label,
           edit: {
             component: Select,
             // props, 透传全部属性到 Select 组件
             props: {
               clearable: true,
-              options: FRAMEWORK_OPTIONS,
+              options: STATUS_OPTIONS,
             },
             // 除了点击非自身元素退出编辑态之外，还有哪些事件退出编辑态
             abortEditOnEvent: ['onChange'],
@@ -106,7 +116,7 @@ export default {
           },
         },
         {
-          title: 'Letters',
+          title: '申请事项',
           colKey: 'letters',
           cell: (h, { row }) => row.letters.join('、'),
           edit: {
@@ -121,14 +131,11 @@ export default {
                 multiple: true,
                 minCollapsedNum: 1,
                 options: [
-                  { label: 'A', value: 'A' },
-                  { label: 'B', value: 'B' },
-                  { label: 'C', value: 'C' },
-                  { label: 'D', value: 'D' },
-                  { label: 'E', value: 'E' },
-                  // 如果框架选择了 React，则 Letters 隐藏 G 和 H
-                  { label: 'G', value: 'G', show: () => editedRow.framework !== 'React' },
-                  { label: 'H', value: 'H', show: () => editedRow.framework !== 'React' },
+                  { label: '宣传物料制作费用', value: '宣传物料制作费用' },
+                  { label: 'algolia 服务报销', value: 'algolia 服务报销' },
+                  // 如果状态选择了 已过期，则 Letters 隐藏 G 和 H
+                  { label: '相关周边制作费', value: '相关周边制作费', show: () => editedRow.status !== 0 },
+                  { label: '激励奖品快递费', value: '激励奖品快递费', show: () => editedRow.status !== 0 },
                 ].filter((t) => (t.show === undefined ? true : t.show())),
               };
             },
@@ -141,7 +148,7 @@ export default {
           },
         },
         {
-          title: 'Date',
+          title: '创建日期',
           colKey: 'createTime',
           // props, 透传全部属性到 DatePicker 组件
           edit: {
@@ -170,12 +177,21 @@ export default {
   },
 
   methods: {
+    // 用于控制哪些行或哪些单元格不允许出现编辑态
     editableCellState(cellParams) {
-      // 第一行不允许编辑
-      return cellParams.rowIndex !== 0;
+      const { row } = cellParams;
+      return row.status !== 2;
     },
     onRowValidate(params) {
       console.log('validate:', params);
+    },
+
+    // 用于提交前校验数据（示例代码有效，勿删）
+    validateTableData() {
+      // 仅校验处于编辑态的单元格
+      this.$refs.tableRef.validateTableData().then((result) => {
+        console.log('validate result: ', result);
+      });
     },
   },
 };

@@ -2,7 +2,6 @@
 
 /**
  * 该文件为脚本自动生成文件，请勿随意修改。如需修改请联系 PMC
- * updated at 2021-12-12 18:09:43
  * */
 
 import { TNode, SizeEnum } from '../common';
@@ -22,7 +21,7 @@ export interface TdButtonProps {
    */
   default?: string | TNode;
   /**
-   * 是否禁用按钮
+   * 禁用状态
    * @default false
    */
   disabled?: boolean;
@@ -55,6 +54,10 @@ export interface TdButtonProps {
    * @default medium
    */
   size?: SizeEnum;
+  /**
+   * 右侧内容，可用于定义右侧图标
+   */
+  suffix?: TNode;
   /**
    * 渲染按钮的 HTML 标签，默认使用标签 `<button>` 渲染，可以自定义为 `<a>` `<div>` 等。透传全部 HTML 属性，如：`href/target/data-*` 等。⚠️ 禁用按钮 `<button disabled>`无法显示 Popup 浮层信息，可通过修改 `tag=div` 解决这个问题
    */

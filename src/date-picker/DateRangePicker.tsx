@@ -12,9 +12,13 @@ import { DateValue, DateRangePickerPartial } from './type';
 import { RangeInputPopup as TRangeInputPopup } from '../range-input';
 import TRangePanel from './panel/RangePanel';
 import useRange from './hooks/useRange';
-import { initYearMonthTime } from './hooks/useRangeValue';
 import {
-  parseToDayjs, formatTime, formatDate, isValidDate, getDefaultFormat,
+  parseToDayjs,
+  formatTime,
+  formatDate,
+  isValidDate,
+  getDefaultFormat,
+  initYearMonthTime,
 } from '../_common/js/date-picker/format';
 import { subtractMonth, addMonth, extractTimeObj } from '../_common/js/date-picker/utils';
 
@@ -65,28 +69,32 @@ export default defineComponent({
 
         // 空数据重置为当前年月
         if (!value.value.length) {
-          year.value = initYearMonthTime({ value: value.value, mode: props.mode, format: formatRef.value.format }).year;
-          month.value = initYearMonthTime({
+          const { year: defaultYear, month: defaultMonth } = initYearMonthTime({
             value: value.value,
             mode: props.mode,
             format: formatRef.value.format,
             enableTimePicker: props.enableTimePicker,
-          }).month;
+          });
+          year.value = defaultYear;
+          month.value = defaultMonth;
         } else if (value.value.length === 2 && !props.enableTimePicker) {
           // 确保右侧面板月份比左侧大 避免两侧面板月份一致
-          const nextMonth = value.value.map((v: string) => parseToDayjs(v || new Date(), formatRef.value.format).month());
+          const nextMonth = value.value.map((v: string) => parseToDayjs(v, formatRef.value.format).month());
           if (year.value[0] === year.value[1] && nextMonth[0] === nextMonth[1]) {
             nextMonth[0] === 11 ? (nextMonth[0] -= 1) : (nextMonth[1] += 1);
           }
           month.value = nextMonth;
-          year.value = value.value.map((v: string) => parseToDayjs(v || new Date(), formatRef.value.format).year());
+          year.value = value.value.map((v: string) => parseToDayjs(v, formatRef.value.format).year());
           // 月份季度选择时需要确保右侧面板年份比左侧大
           if ((props.mode === 'month' || props.mode === 'quarter') && year.value[0] === year.value[1]) {
             year.value = [year.value[0], year.value[0] + 1];
           }
         } else {
-          year.value = value.value.map((v: string) => parseToDayjs(v || new Date(), formatRef.value.format).year());
-          month.value = value.value.map((v: string) => parseToDayjs(v || new Date(), formatRef.value.format).month());
+          year.value = value.value.map((v: string) => parseToDayjs(v, formatRef.value.format).year());
+          if (year.value.length === 1) year.value = [year.value[0], year.value[0]];
+
+          month.value = value.value.map((v: string) => parseToDayjs(v, formatRef.value.format).month());
+          if (month.value.length === 1) month.value = [month.value[0], Math.min(month.value[0] + 1, 11)];
         }
       } else {
         isHoverCell.value = false;
@@ -359,7 +367,7 @@ export default defineComponent({
       const nextMonth = [...month.value];
       nextMonth[partialIndex] = nextVal;
       // 保证左侧时间不大于右侧
-      if (year[0] === year[1]) {
+      if (year.value[0] === year.value[1]) {
         if (partialIndex === 0) nextMonth[1] = Math.max(nextMonth[0], nextMonth[1]);
         if (partialIndex === 1) nextMonth[0] = Math.min(nextMonth[0], nextMonth[1]);
       }
@@ -430,7 +438,7 @@ export default defineComponent({
         <TRangeInputPopup
           disabled={this.disabled}
           status={this.status}
-          tips={this.tips}
+          tips={this.tips || this.$scopedSlots.tips}
           inputValue={inputValue as string[]}
           popupProps={dateRangePickerPopupProps}
           rangeInputProps={{

@@ -3,7 +3,9 @@
     style="width: 300px"
     :data="options"
     v-model="value"
+    :popupVisible="popupVisible"
     @blur="onBlurTrigger"
+    @popup-visible-change="onVisibleChange"
     filterable
     clearable
     placeholder="请选择"
@@ -14,6 +16,7 @@ export default {
   data() {
     return {
       value: '',
+      popupVisible: false,
       options: [
         {
           label: '广东省',
@@ -26,6 +29,12 @@ export default {
             {
               label: '深圳市',
               value: 'shenzhen',
+              children: [
+                {
+                  label: '南山区海天二路33号腾讯滨海大厦',
+                  value: 'Tencent',
+                },
+              ],
             },
           ],
         },
@@ -50,6 +59,11 @@ export default {
   methods: {
     onBlurTrigger(context) {
       console.log(context);
+    },
+    onVisibleChange(v, c) {
+      if (c.trigger || c.node?.label !== '广州市') {
+        this.popupVisible = v;
+      }
     },
   },
 };

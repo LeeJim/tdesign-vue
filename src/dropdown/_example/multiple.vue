@@ -1,11 +1,9 @@
 <template>
   <div class="tdesign-demo-dropdown">
-    <t-dropdown :options="options" @click="clickHandler" :maxColumnWidth="120">
+    <t-dropdown :options="options" @click="clickHandler" :maxColumnWidth="120" :maxHeight="200">
       <t-button variant="text">
-        <span class="tdesign-demo-dropdown__text">
-          下拉菜单
-          <chevron-down-icon size="16" />
-        </span>
+        下拉菜单
+        <chevron-down-icon size="16" slot="suffix" />
       </t-button>
     </t-dropdown>
   </div>
@@ -37,16 +35,6 @@ export default {
             {
               content: '操作五',
               value: 5,
-              children: [
-                {
-                  content: '操作七',
-                  value: 7,
-                },
-                {
-                  content: '操作八',
-                  value: 8,
-                },
-              ],
             },
             {
               content: '操作六',
@@ -74,6 +62,66 @@ export default {
             },
           ],
         },
+        {
+          content: '操作五',
+          value: 5,
+          children: [
+            {
+              content: '操作十二',
+              value: 12,
+            },
+          ],
+        },
+        {
+          content: '操作六',
+          value: 6,
+          children: [
+            {
+              content: '操作十三',
+              value: 13,
+            },
+          ],
+        },
+        {
+          content: '操作七',
+          value: 7,
+        },
+        {
+          content: '操作八',
+          value: 8,
+        },
+        {
+          content: '操作十八',
+          value: 18,
+          children: [
+            {
+              content: '操作十四',
+              value: 14,
+            },
+            {
+              content: '操作十五',
+              value: 15,
+            },
+            {
+              content: '操作十六',
+              value: 16,
+              children: [
+                {
+                  content: '三级操作一',
+                  value: 20,
+                },
+                {
+                  content: '三级操作二',
+                  value: 21,
+                },
+              ],
+            },
+            {
+              content: '操作十七',
+              value: 17,
+            },
+          ],
+        },
       ],
     };
   },
@@ -85,14 +133,3 @@ export default {
   },
 };
 </script>
-<style lang="less" scoped>
-.tdesign-demo-dropdown {
-  &__text {
-    display: inline-flex;
-    align-items: center;
-    .t-icon {
-      margin-left: 8px;
-    }
-  }
-}
-</style>

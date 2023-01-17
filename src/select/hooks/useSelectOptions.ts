@@ -1,9 +1,13 @@
+/**
+ * Select 内部 option 处理
+ * 将 slot 方式传入的 <t-option /> 元素与 prop 方式传入的 options 参数进行统一收编处理，便于数据管理和筛选
+ */
+
 import {
   ref, Ref, computed, onBeforeUpdate, ComponentInternalInstance, watch,
 } from '@vue/composition-api';
 import { VNode } from 'vue';
 import get from 'lodash/get';
-import isArray from 'lodash/isArray';
 import {
   TdSelectProps, SelectKeysType, TdOptionProps, SelectOptionGroup, SelectValue,
 } from '../type';
@@ -18,7 +22,11 @@ export default function useSelectOptions(
   instance: ComponentInternalInstance,
   keys: Ref<SelectKeysType>,
 ) {
+  // 内部 options 记录
   const options = ref<UniOption[]>([]);
+
+  // 指向当前 slots 数组，用来判断 slot 是否被更新
+  let innerSlotRecord: VNode[] = null;
 
   const getOptions = () => {
     let dynamicIndex = 0;
@@ -45,50 +53,48 @@ export default function useSelectOptions(
       return getFormatOption(option);
     }) || [];
 
-    // 处理 slots 中 t-option 与 t-option-group
-    const currentSlots = instance.proxy.$slots.default || [];
-    const optionsSlots = currentSlots.filter((item) => item.componentOptions?.tag === 't-option');
-    const groupSlots = currentSlots.filter((item) => item.componentOptions?.tag === 't-option-group');
-    if (isArray(groupSlots)) {
-      groupSlots.forEach((group) => {
-        const groupOption = {
-          group: (group.componentOptions.propsData as TdOptionProps)?.label,
-          ...group.componentOptions.propsData,
-          children: [] as TdOptionProps[],
-        };
+    // props 中 options 参数优先级高于 slots
+    if (props.options === undefined) {
+      // 记录当前 slot 数组
+      innerSlotRecord = instance.proxy.$slots.default;
+      // 处理 slots 中 t-option 与 t-option-group
+      const currentSlots = instance.proxy.$slots.default || [];
+      currentSlots.forEach((child) => {
+        if (child.componentOptions?.tag === 't-option') {
+          // 独立选项
+          innerOptions.push({
+            // 单独处理 style 和 class 参数的透传
+            class: child.data.staticClass,
+            style: child.data.staticStyle,
+            // 透传其他常规参数
+            ...child.componentOptions.propsData,
+            slots: () => child.componentOptions.children,
+            index: dynamicIndex,
+          } as TdOptionProps);
+          dynamicIndex += 1;
+        } else if (child.componentOptions?.tag === 't-option-group') {
+          // 分组选项
+          const groupOption = {
+            group: (child.componentOptions.propsData as TdOptionProps)?.label,
+            ...child.componentOptions.propsData,
+            children: [] as TdOptionProps[],
+          };
 
-        const res = group.componentOptions.children;
-        if (isArray(res)) {
-          res.forEach((child) => {
+          child.componentOptions.children?.forEach?.((groupChild) => {
             groupOption.children.push({
               // 单独处理 style 和 class 参数的透传
-              class: child.data.staticClass,
-              style: child.data.staticStyle,
+              class: groupChild.data.staticClass,
+              style: groupChild.data.staticStyle,
               // 透传其他常规参数
-              ...child.componentOptions.propsData,
-              slots: () => child.componentOptions.children,
+              ...groupChild.componentOptions.propsData,
+              slots: () => groupChild.componentOptions.children,
               index: dynamicIndex,
             } as TdOptionProps);
             dynamicIndex += 1;
           });
+
+          innerOptions.push(groupOption);
         }
-
-        innerOptions.push(groupOption);
-      });
-    }
-
-    if (isArray(optionsSlots)) {
-      optionsSlots.forEach((child) => {
-        innerOptions.push({
-          // 单独处理 style 和 class 参数的透传
-          class: child.data.staticClass,
-          style: child.data.staticStyle,
-          // 透传其他常规参数
-          ...child.componentOptions.propsData,
-          slots: () => child.componentOptions.children,
-          index: dynamicIndex,
-        } as TdOptionProps);
-        dynamicIndex += 1;
       });
     }
 
@@ -118,7 +124,7 @@ export default function useSelectOptions(
     return res;
   });
 
-  // 首次初始化的时候
+  // 组件初始化，构造内部 options 数组
   getOptions();
   // 监听 options 参数，变化时重新构造内部 options 数组
   watch(
@@ -127,9 +133,11 @@ export default function useSelectOptions(
       getOptions();
     },
   );
-  // 监听组件 slot，当变化时构造内部 options 数组
+  // 当组件 slot 变化时，重新构造内部 options 数组
   onBeforeUpdate(() => {
-    getOptions();
+    if (props.options === undefined && innerSlotRecord !== instance.proxy.$slots.default) {
+      getOptions();
+    }
   });
 
   return {

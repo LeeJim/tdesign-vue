@@ -3,13 +3,13 @@ import {
 } from '@vue/composition-api';
 import { CreateElement } from 'vue';
 import { useConfig } from '../../config-provider/useConfig';
-import Pagination, { PageInfo } from '../../pagination';
+import Pagination, { PageInfo, PaginationProps } from '../../pagination';
 import { TdBaseTableProps, TableRowData } from '../type';
 
 export default function usePagination(props: TdBaseTableProps, context: SetupContext) {
   const { pagination, data, disableDataPage } = toRefs(props);
   const { classPrefix } = useConfig();
-
+  const innerPagination = ref<PaginationProps>(props.pagination);
   const pageSize = pagination.value?.pageSize || pagination.value?.defaultPageSize || 10;
   const dataSource = ref<TableRowData[]>(props.data?.slice(0, pageSize) || []);
   const isPaginateData = ref(false);
@@ -26,6 +26,7 @@ export default function usePagination(props: TdBaseTableProps, context: SetupCon
     } else {
       dataSource.value = data;
     }
+    return dataSource.value;
   };
 
   // 受控情况，只有 pagination.current 或者 pagination.pageSize 变化，才对数据进行排序
@@ -58,15 +59,16 @@ export default function usePagination(props: TdBaseTableProps, context: SetupCon
             props: pagination.value,
             on: {
               change: (pageInfo: PageInfo) => {
+                props.pagination?.onChange?.(pageInfo);
+                innerPagination.value = pageInfo;
+                updateDataSourceAndPaginate(pageInfo.current, pageInfo.pageSize);
                 // Vue3 ignore this line
                 context.emit('page-change', pageInfo, dataSource.value);
-                // 如果是非受控情况的分页变化，还需更新分页数据（data）
-                if (pagination.value && !pagination.value.current && pagination.value.defaultCurrent) {
-                  updateDataSourceAndPaginate(pageInfo.current, pageInfo.pageSize);
-                }
+                props.onPageChange?.(pageInfo, dataSource.value);
               },
             },
           }}
+          scopedSlots={{ totalContent: context.slots.totalContent }}
         />
       </div>
     );
@@ -75,6 +77,7 @@ export default function usePagination(props: TdBaseTableProps, context: SetupCon
   return {
     isPaginateData,
     dataSource,
+    innerPagination,
     renderPagination,
   };
 }

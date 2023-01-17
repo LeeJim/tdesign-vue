@@ -14,13 +14,13 @@ export * from './affix';
 export * from './anchor';
 export * from './breadcrumb';
 export * from './dropdown';
-export * from './jumper';
 export * from './menu';
 export * from './pagination';
 export * from './steps';
 export * from './tabs';
 
 // 输入
+export * from './auto-complete';
 export * from './cascader';
 export * from './checkbox';
 export * from './color-picker';
@@ -61,12 +61,14 @@ export * from './tree';
 export * from './watermark';
 export * from './collapse';
 export * from './rate';
+export * from './timeline';
 
 // 消息提醒
 
 export * from './alert';
 export * from './dialog';
 export * from './drawer';
+export * from './guide';
 export * from './message';
 export * from './notification';
 export * from './popconfirm';

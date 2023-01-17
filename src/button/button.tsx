@@ -20,7 +20,9 @@ export default mixins(keepAnimationMixins, classPrefixMixins).extend({
     let buttonContent = renderContent(this, 'default', 'content');
     const icon = this.loading ? <TLoading inheritColor={true} /> : renderTNodeJSX(this, 'icon');
     const disabled = this.disabled || this.loading;
-
+    const suffix = this.suffix || this.$scopedSlots.suffix ? (
+        <span class={`${this.componentName}__suffix`}>{renderTNodeJSX(this, 'suffix')}</span>
+    ) : null;
     let { theme } = this;
 
     if (!this.theme) {
@@ -33,10 +35,10 @@ export default mixins(keepAnimationMixins, classPrefixMixins).extend({
 
     const buttonClass = [
       `${this.componentName}`,
-      this.commonSizeClassName[this.size],
       `${this.componentName}--variant-${this.variant}`,
       `${this.componentName}--theme-${theme}`,
       {
+        [this.commonSizeClassName[this.size]]: this.size !== 'medium',
         [this.commonStatusClassName.disabled]: this.disabled,
         [this.commonStatusClassName.loading]: this.loading,
         [`${this.componentName}--shape-${this.shape}`]: this.shape !== 'rectangle',
@@ -49,6 +51,9 @@ export default mixins(keepAnimationMixins, classPrefixMixins).extend({
     if (icon) {
       buttonContent = [icon, buttonContent];
     }
+    if (suffix) {
+      buttonContent = [buttonContent].concat(suffix);
+    }
 
     const on = { ...this.$listeners };
     if (typeof this.onClick === 'function') {
@@ -58,7 +63,7 @@ export default mixins(keepAnimationMixins, classPrefixMixins).extend({
     const buttonAttrs = {
       type: this.type,
       disabled,
-      href: this.href,
+      href: this.href || undefined,
     };
 
     const renderTag = () => {

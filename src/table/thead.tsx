@@ -6,16 +6,19 @@ import { CreateElement } from 'vue';
 import { getColumnFixedStyles } from './hooks/useFixed';
 import { RowAndColFixedPosition, BaseTableColumns, ThRowspanAndColspan } from './interface';
 import useClassName from './hooks/useClassName';
-import { BaseTableCol, TableRowData } from './type';
+import { BaseTableCol, TableRowData, TdBaseTableProps } from './type';
 import { renderTitle } from './hooks/useTableHeader';
 import TEllipsis from './ellipsis';
 import { formatClassNames } from './utils';
+import { AttachNode } from '../common';
 
 export interface TheadProps {
   classPrefix?: string;
   ellipsisOverlayClassName?: string;
   // 是否固定表头
   isFixedHeader?: boolean;
+  maxHeight?: TdBaseTableProps['maxHeight'];
+  height?: TdBaseTableProps['height'];
   // 固定列 left/right 具体值
   rowAndColFixedPosition?: RowAndColFixedPosition;
   // 虚拟滚动单独渲染表头；表头吸顶单独渲染表头
@@ -34,6 +37,7 @@ export interface TheadProps {
     onColumnMousedown: (e: MouseEvent, col: BaseTableCol<TableRowData>) => void;
   };
   resizable?: Boolean;
+  attach?: AttachNode;
 }
 
 export default defineComponent({
@@ -42,6 +46,8 @@ export default defineComponent({
   props: {
     ellipsisOverlayClassName: String,
     isFixedHeader: Boolean,
+    maxHeight: [String, Number] as PropType<TheadProps['maxHeight']>,
+    height: [String, Number] as PropType<TheadProps['height']>,
     rowAndColFixedPosition: Map as PropType<TheadProps['rowAndColFixedPosition']>,
     thWidthList: Object as PropType<TheadProps['thWidthList']>,
     bordered: Boolean,
@@ -50,6 +56,7 @@ export default defineComponent({
     spansAndLeafNodes: Object as PropType<TheadProps['spansAndLeafNodes']>,
     thList: Array as PropType<TheadProps['thList']>,
     columnResizeParams: Object as PropType<TheadProps['columnResizeParams']>,
+    attach: [String, Function] as PropType<TheadProps['attach']>,
   },
 
   setup(props: TheadProps, { slots }: SetupContext) {
@@ -59,7 +66,7 @@ export default defineComponent({
     const theadClasses = computed(() => [
       tableHeaderClasses.header,
       {
-        [tableHeaderClasses.fixed]: props.isFixedHeader,
+        [tableHeaderClasses.fixed]: Boolean(props.maxHeight || props.height),
         [tableBaseClass.bordered]: props.bordered && props.isMultipleHeader,
         [tableHeaderClasses.multipleHeader]: props.isMultipleHeader,
       },
@@ -170,7 +177,7 @@ export default defineComponent({
                 {isEllipsis ? (
                   <TEllipsis
                     placement="bottom"
-                    attach={this.theadRef ? () => this.getTableNode(this.theadRef) : undefined}
+                    attach={this.attach || (this.theadRef ? () => this.getTableNode(this.theadRef) : undefined)}
                     tooltipContent={content && (() => content)}
                     tooltipProps={typeof col.ellipsisTitle === 'object' ? col.ellipsisTitle : undefined}
                     overlayClassName={this.ellipsisOverlayClassName}

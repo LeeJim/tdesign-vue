@@ -1,10 +1,11 @@
 import { mount } from '@vue/test-utils';
 import Tree from '@/src/tree/index.ts';
+import { delay } from './kit';
 
 describe('Tree:init', () => {
   vi.useRealTimers();
   describe(':props.data', () => {
-    it('传递空数据时，展示兜底界面', () => {
+    it('传递空数据时，展示兜底界面', async () => {
       const wrapper = mount({
         render() {
           return (
@@ -16,10 +17,11 @@ describe('Tree:init', () => {
           );
         },
       });
+      await delay(1);
       expect(wrapper.find('.tree-empty').exists()).toBe(true);
     });
 
-    it('空数据初始化后，允许插入根节点', () => new Promise((done) => {
+    it('空数据初始化后，允许插入根节点', () => new Promise((resolve) => {
       const wrapper = mount({
         mounted() {
           const { tree } = this.$refs;
@@ -29,7 +31,7 @@ describe('Tree:init', () => {
           setTimeout(() => {
             expect(wrapper.find('.tree-empty').exists()).toBe(false);
             expect(wrapper.find('[data-value="insert1"]').exists()).toBe(true);
-            done();
+            resolve();
           });
         },
         render() {

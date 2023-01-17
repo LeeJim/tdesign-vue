@@ -10,8 +10,6 @@ import {
   reactive,
 } from '@vue/composition-api';
 import Vue, { PropType } from 'vue';
-
-import { ScopedSlotReturnValue } from 'vue/types/vnode';
 import { renderContent } from '../utils/render-tnode';
 import Ripple from '../utils/ripple';
 import { getKeepAnimationMixins } from '../config-provider/config-receiver';
@@ -24,6 +22,7 @@ import { TScroll } from '../common';
 import { getNewMultipleValue } from './util';
 import { useConfig } from '../config-provider/useConfig';
 import useCommonClassName from '../hooks/useCommonClassName';
+import useFormDisabled from '../hooks/useFormDisabled';
 
 const keepAnimationMixins = getKeepAnimationMixins();
 export interface OptionInstance extends Vue {
@@ -68,7 +67,7 @@ export default defineComponent({
     const { classPrefix } = useConfig('classPrefix');
 
     const {
-      value, label, disabled, panelElement, scrollType, bufferSize, index, multiple, isCreatedOption,
+      value, label, multiple, disabled, panelElement, scrollType, bufferSize, index, isCreatedOption,
     } = toRefs(props);
 
     const { hasLazyLoadHolder = null, tRowHeight = null } = useLazyLoad(
@@ -78,11 +77,26 @@ export default defineComponent({
     );
 
     const isHover = ref(false);
-    const formDisabled = ref(undefined);
-    const isDisabled = computed(() => formDisabled.value || disabled.value || selectProvider.isReachMaxLimit.value);
-    const isSelected = computed(() => multiple.value
-      ? (selectProvider.selectValue.value as SelectValue[])?.includes(props.value)
-      : selectProvider.selectValue.value === props.value);
+    const { formDisabled } = useFormDisabled();
+    const isSelected = computed(() => {
+      if (multiple.value) {
+        if (props.checkAll) {
+          return selectProvider.isAllOptionsChecked.value;
+        }
+        return (selectProvider.selectValue.value as SelectValue[])?.includes(props.value);
+      }
+      return selectProvider.selectValue.value === props.value;
+    });
+    const isIndeterminate = computed(
+      () => multiple.value
+        && !selectProvider.isAllOptionsChecked.value
+        && (selectProvider.selectValue.value as SelectValue[]).length > 0,
+    );
+    const isDisabled = computed(
+      () => disabled.value
+        || formDisabled.value
+        || (multiple.value && !isSelected.value && !props.checkAll && selectProvider.isReachMaxLimit.value),
+    );
     const mouseEvent = (v: boolean) => {
       isHover.value = v;
     };
@@ -100,30 +114,30 @@ export default defineComponent({
     ]);
 
     const handleClick = (e: MouseEvent | KeyboardEvent) => {
-      if (multiple.value || isDisabled.value) return;
-      e.stopPropagation();
+      if (isDisabled.value) return;
+      e.preventDefault();
 
       if (isCreatedOption.value) {
         selectProvider.handleCreate?.(value.value);
-        if (selectProvider.multiple.value) {
-          const newValue = getNewMultipleValue(selectProvider.selectValue.value as SelectValue[], value.value);
-          selectProvider.handleValueChange(newValue.value, { e, trigger: 'check' }, value.value);
-          return;
-        }
       }
-      selectProvider.handleValueChange(value.value, { e, trigger: 'check' }, value.value);
-      selectProvider.handlePopupVisibleChange(false, { e });
-    };
 
-    const handleCheckboxClick = (val: boolean, context: { e: MouseEvent | KeyboardEvent }) => {
-      const newValue = getNewMultipleValue(selectProvider.selectValue.value as SelectValue[], value.value);
-      selectProvider.handleValueChange(
-        newValue.value,
-        { e: context.e, trigger: val ? 'check' : 'uncheck' },
-        value.value,
-      );
-      if (!selectProvider.reserveKeyword.value) {
-        selectProvider.handlerInputChange('');
+      if (multiple.value) {
+        if (props.checkAll) {
+          selectProvider.handleCheckAllClick(e);
+        } else {
+          const newValue = getNewMultipleValue(selectProvider.selectValue.value as SelectValue[], value.value);
+          selectProvider.handleValueChange(
+            newValue.value,
+            { e, trigger: newValue.isCheck ? 'check' : 'uncheck' },
+            value.value,
+          );
+          if (!selectProvider.reserveKeyword.value) {
+            selectProvider.handlerInputChange('');
+          }
+        }
+      } else {
+        selectProvider.handleValueChange(value.value, { e, trigger: 'check' }, value.value);
+        selectProvider.handlePopupVisibleChange(false, { e });
       }
     };
 
@@ -152,6 +166,8 @@ export default defineComponent({
     return {
       isHover,
       isSelected,
+      isDisabled,
+      isIndeterminate,
       mouseEvent,
       classes,
       selectProvider,
@@ -160,16 +176,12 @@ export default defineComponent({
       tRowHeight,
       hasLazyLoadHolder,
       handleClick,
-      handleCheckboxClick,
     };
   },
 
   render() {
-    const {
-      classes, multiple, labelText, isSelected, disabled, selectProvider, handleCheckboxClick, mouseEvent,
-    } = this;
-    const children: ScopedSlotReturnValue = renderContent(this, 'default', 'content');
-    const optionChild = children || <span>{labelText}</span>;
+    const { classes, mouseEvent } = this;
+    const optionChild = renderContent(this, 'default', 'content') || <span>{this.labelText}</span>;
     if (this.hasLazyLoadHolder) {
       return (
         <li
@@ -194,11 +206,11 @@ export default defineComponent({
         onClick={this.handleClick}
         v-ripple={(this.keepAnimation as any).ripple}
       >
-        {multiple ? (
+        {this.multiple ? (
           <t-checkbox
-            checked={isSelected}
-            disabled={disabled || (!isSelected && selectProvider.isReachMaxLimit.value)}
-            onChange={handleCheckboxClick}
+            checked={this.isSelected}
+            disabled={this.isDisabled}
+            indeterminate={this.checkAll && this.isIndeterminate}
           >
             {optionChild}
           </t-checkbox>

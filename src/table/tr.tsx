@@ -6,9 +6,8 @@ import {
   ref,
   reactive,
   computed,
-  onBeforeUnmount,
-  onMounted,
   toRefs,
+  watch,
 } from '@vue/composition-api';
 import isFunction from 'lodash/isFunction';
 import upperFirst from 'lodash/upperFirst';
@@ -21,12 +20,15 @@ import { getRowFixedStyles, getColumnFixedStyles } from './hooks/useFixed';
 import { RowAndColFixedPosition } from './interface';
 import useClassName from './hooks/useClassName';
 import TEllipsis from './ellipsis';
-import {
-  BaseTableCellParams, TableRowData, RowspanColspan, TdPrimaryTableProps, TdBaseTableProps,
-} from './type';
 import baseTableProps from './base-table-props';
 import { getCellKey, SkipSpansValue } from './hooks/useRowspanAndColspan';
 import useLazyLoad from '../hooks/useLazyLoad';
+import { PaginationProps } from '../pagination';
+import { VirtualScrollConfig } from '../hooks/useVirtualScrollNew';
+import {
+  BaseTableCellParams, TableRowData, RowspanColspan, TdPrimaryTableProps, TdBaseTableProps,
+} from './type';
+import { AttachNode } from '../common';
 
 export interface RenderTdExtra {
   rowAndColFixedPosition: RowAndColFixedPosition;
@@ -52,6 +54,8 @@ export const TABLE_PROPS = [
   'rowspanAndColspan',
   'scroll',
   'cellEmptyContent',
+  'pagination',
+  'attach',
   'onCellClick',
   'onRowClick',
   'onRowDblclick',
@@ -80,6 +84,8 @@ export interface TrProps extends TrCommonProps {
   bufferSize?: number;
   tableContentElm?: HTMLDivElement;
   cellEmptyContent?: TdBaseTableProps['cellEmptyContent'];
+  virtualConfig: VirtualScrollConfig;
+  attach?: AttachNode;
 }
 
 export const ROW_LISTENERS = ['click', 'dblclick', 'mouseover', 'mousedown', 'mouseenter', 'mouseleave', 'mouseup'];
@@ -89,11 +95,20 @@ export function renderCell(
   slots: SetupContext['slots'],
   extra?: {
     cellEmptyContent?: TdBaseTableProps['cellEmptyContent'];
+    pagination?: PaginationProps;
   },
 ) {
   const { col, row, rowIndex } = params;
   // support serial number column
   if (col.colKey === 'serial-number') {
+    const {
+      current, pageSize, defaultCurrent, defaultPageSize,
+    } = extra?.pagination || {};
+    const tCurrent = current || defaultCurrent;
+    const tPageSize = pageSize || defaultPageSize;
+    if (tPageSize && tCurrent) {
+      return tPageSize * (tCurrent - 1) + rowIndex + 1;
+    }
     return rowIndex + 1;
   }
   if (isFunction(col.cell)) {
@@ -132,12 +147,8 @@ export default defineComponent({
     rowAndColFixedPosition: Map as PropType<RowAndColFixedPosition>,
     // 合并单元格，是否跳过渲染
     skipSpansMap: Map as PropType<TrProps['skipSpansMap']>,
+    virtualConfig: Object as PropType<TrProps['virtualConfig']>,
     ...pick(baseTableProps, TABLE_PROPS),
-    scrollType: String,
-    rowHeight: Number,
-    trs: Map as PropType<TrProps['trs']>,
-    bufferSize: Number,
-    isVirtual: Boolean,
     // eslint-disabled-next-line
     tableElm: {},
     // eslint-disabled-next-line
@@ -195,24 +206,12 @@ export default defineComponent({
       return trListeners;
     };
 
-    onMounted(() => {
-      const {
-        trs, row: rowData, scrollType, isVirtual,
-      } = props;
-      if (scrollType === 'virtual') {
-        if (isVirtual) {
-          const { $index } = rowData;
-          trs.set($index, trRef.value);
-          context.emit('onRowMounted');
-        }
-      }
-    });
-
-    onBeforeUnmount(() => {
-      if (props.isVirtual) {
-        const { trs, row } = props;
-        const { $index } = row;
-        trs.delete($index);
+    watch([trRef], () => {
+      if (props.virtualConfig?.isVirtualScroll.value) {
+        context.emit('row-mounted', {
+          ref: trRef,
+          data: props.row,
+        });
       }
     });
 
@@ -220,7 +219,6 @@ export default defineComponent({
       trRef,
       tableColFixedClasses,
       tableDraggableClasses,
-      tSlots: context.slots,
       tdEllipsisClass,
       tableBaseClass,
       tdAlignClasses,
@@ -252,7 +250,7 @@ export default defineComponent({
       return (
         <TEllipsis
           placement={'top'}
-          attach={this.tableElm ? () => this.tableElm : undefined}
+          attach={this.attach || (this.tableElm ? () => this.tableElm : undefined)}
           tooltipContent={content && (() => content)}
           tooltipProps={tooltipProps}
           overlayClassName={this.ellipsisOverlayClassName}
@@ -266,7 +264,10 @@ export default defineComponent({
     renderTd(h: CreateElement, params: BaseTableCellParams<TableRowData>, extra: RenderTdExtra) {
       const { col, colIndex, rowIndex } = params;
       const { cellSpans, dataLength, rowAndColFixedPosition } = extra;
-      const cellNode = renderCell(params, this.tSlots, { cellEmptyContent: extra.cellEmptyContent });
+      const cellNode = renderCell(params, this.$scopedSlots, {
+        cellEmptyContent: extra.cellEmptyContent,
+        pagination: this.pagination,
+      });
       const tdStyles = getColumnFixedStyles(col, colIndex, rowAndColFixedPosition, this.tableColFixedClasses);
       const customClasses = formatClassNames(col.className, { ...params, type: 'td' });
       const classes = [
@@ -283,6 +284,9 @@ export default defineComponent({
       ];
       const onClick = (e: MouseEvent) => {
         const p = { ...params, e };
+        if (col.stopPropagation) {
+          e.stopPropagation();
+        }
         this.onCellClick?.(p);
         // Vue3 ignore this line
         this.$emit('cell-click', p);

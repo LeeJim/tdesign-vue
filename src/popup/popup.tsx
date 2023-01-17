@@ -236,7 +236,6 @@ export default mixins(classPrefixMixins).extend({
       const triggerEl = this.$el as HTMLElement;
       const overlayEl = this.$refs?.overlay as HTMLElement;
 
-      if (!triggerEl || !overlayEl) return;
       if (typeof overlayStyle === 'function') {
         return overlayStyle(triggerEl, overlayEl);
       }
@@ -436,7 +435,7 @@ export default mixins(classPrefixMixins).extend({
         }}
         parent={this}
         visible={visible}
-        attach={this.attach}
+        attach={() => ({ attach: this.attach, current: this.$el })}
       >
         <transition
           slot="content"

@@ -41,6 +41,7 @@ export default mixins(Vue as VueConstructor<Textarea>, classPrefixMixins).extend
       focused: false,
       mouseHover: false,
       textareaStyle: {},
+      isComposing: false,
     };
   },
 
@@ -87,6 +88,20 @@ export default mixins(Vue as VueConstructor<Textarea>, classPrefixMixins).extend
     this.adjustTextareaHeight();
   },
 
+  watch: {
+    autofocus: {
+      handler(val) {
+        if (val === true) {
+          this.$nextTick(() => {
+            const textArea = this.$refs.refTextareaElem as HTMLInputElement;
+            textArea?.focus();
+          });
+        }
+      },
+      immediate: true,
+    },
+  },
+
   methods: {
     adjustTextareaHeight() {
       if (this.autosize === true) {
@@ -109,18 +124,21 @@ export default mixins(Vue as VueConstructor<Textarea>, classPrefixMixins).extend
     },
 
     focus(): void {
-      const input = this.$refs.refTextareaElem as HTMLInputElement;
-      input?.focus();
+      const textArea = this.$refs.refTextareaElem as HTMLInputElement;
+      textArea?.focus();
     },
     blur(): void {
-      const input = this.$refs.refTextareaElem as HTMLInputElement;
-      input?.blur();
+      const textArea = this.$refs.refTextareaElem as HTMLInputElement;
+      textArea?.blur();
     },
     handleInput(e: any): void {
-      if (e.isComposing || e.inputType === 'insertCompositionText') return;
       this.inputValueChangeHandle(e);
     },
+    onCompositionstart() {
+      this.isComposing = true;
+    },
     onCompositionend(e: InputEvent) {
+      this.isComposing = false;
       this.inputValueChangeHandle(e);
     },
     inputValueChangeHandle(e: InputEvent) {
@@ -132,7 +150,8 @@ export default mixins(Vue as VueConstructor<Textarea>, classPrefixMixins).extend
         val = typeof stringInfo === 'object' && stringInfo.characters;
       }
       this.$emit('input', val);
-      this.emitEvent('change', val, { e });
+      // 中文输入时不触发 onChange
+      !this.isComposing && this.emitEvent('change', val, { e });
 
       this.$nextTick(() => this.setInputValue(val));
       this.adjustTextareaHeight();
@@ -194,6 +213,7 @@ export default mixins(Vue as VueConstructor<Textarea>, classPrefixMixins).extend
       <div class={this.textareaClasses}>
         <textarea
           onInput={this.handleInput}
+          onCompositionstart={this.onCompositionstart}
           onCompositionend={this.onCompositionend}
           {...{ attrs: { ...this.$attrs, ...this.inputAttrs }, on: inputEvents }}
           value={this.value}

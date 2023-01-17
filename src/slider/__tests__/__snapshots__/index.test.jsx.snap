@@ -64,11 +64,9 @@ exports[`Slider [marks] > render right 1`] = `
         />
       </div>
       <div>
-        <div>
-          <div
-            class="t-slider__stop t-slider__mark-stop"
-            style="left: 0%;"
-          />
+        <div
+          class="t-slider__stops"
+        >
           <div
             class="t-slider__stop t-slider__mark-stop"
             style="left: 8%;"
@@ -120,7 +118,7 @@ exports[`Slider [marks] > render right 1`] = `
       class="t-input-number t-size-m t-is-controls-right t-input-number--column t-slider__input"
     >
       <button
-        class="t-button t-size-m t-button--variant-outline t-button--theme-default t-button--shape-square t-input-number__decrease"
+        class="t-button t-button--variant-outline t-button--theme-default t-button--shape-square t-input-number__decrease"
         type="button"
       >
         <svg
@@ -141,7 +139,7 @@ exports[`Slider [marks] > render right 1`] = `
         class="t-input__wrap"
       >
         <div
-          class="t-input t-size-m"
+          class="t-input"
         >
           <input
             autocomplete="off"
@@ -153,7 +151,7 @@ exports[`Slider [marks] > render right 1`] = `
         </div>
       </div>
       <button
-        class="t-button t-size-m t-button--variant-outline t-button--theme-default t-button--shape-square t-input-number__increase"
+        class="t-button t-button--variant-outline t-button--theme-default t-button--shape-square t-input-number__increase"
         type="button"
       >
         <svg
@@ -216,11 +214,9 @@ exports[`Slider [vertical-marks] > render right 1`] = `
         />
       </div>
       <div>
-        <div>
-          <div
-            class="t-slider__stop t-slider__mark-stop"
-            style="top: calc(100% - 1px);"
-          />
+        <div
+          class="t-slider__stops"
+        >
           <div
             class="t-slider__stop t-slider__mark-stop"
             style="top: calc(92% - 1px);"

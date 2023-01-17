@@ -171,14 +171,6 @@ const docs = [
         componentEn: () => import('tdesign-vue/dropdown/dropdown.en-US.md'),
       },
       {
-        title: 'Jumper 跳转',
-        titleEn: 'Jumper',
-        name: 'jumper',
-        path: '/vue/components/jumper',
-        component: () => import('tdesign-vue/jumper/jumper.md'),
-        componentEn: () => import('tdesign-vue/jumper/jumper.en-US.md'),
-      },
-      {
         title: 'Menu 导航菜单',
         titleEn: 'Menu',
         name: 'menu',
@@ -217,6 +209,14 @@ const docs = [
     titleEn: 'Input',
     type: 'component', // 组件文档
     children: [
+      {
+        title: 'AutoComplete 自动填充',
+        titleEn: 'AutoComplete',
+        name: 'auto-complete',
+        path: '/vue/components/auto-complete',
+        component: () => import('tdesign-vue/auto-complete/auto-complete.md'),
+        componentEn: () => import('tdesign-vue/auto-complete/auto-complete.en-US.md'),
+      },
       {
         title: 'Cascader 级联组件',
         titleEn: 'Cascader',
@@ -507,6 +507,14 @@ const docs = [
         componentEn: () => import('tdesign-vue/tag/tag.en-US.md'),
       },
       {
+        title: 'Timeline 时间轴',
+        titleEn: 'Timeline',
+        name: 'timeline',
+        path: '/vue/components/timeline',
+        component: () => import('tdesign-vue/timeline/timeline.md'),
+        componentEn: () => import('tdesign-vue/timeline/timeline.en-US.md'),
+      },
+      {
         title: 'Tooltip 文字提示',
         titleEn: 'Tooltip',
         name: 'tooltip',
@@ -569,6 +577,12 @@ const docs = [
         path: '/vue/components/drawer',
         component: () => import('tdesign-vue/drawer/drawer.md'),
         componentEn: () => import('tdesign-vue/drawer/drawer.en-US.md'),
+      },
+      {
+        title: 'Guide 引导',
+        name: 'guide',
+        path: '/vue/components/guide',
+        component: () => import('tdesign-vue/guide/guide.md'),
       },
       {
         title: 'Message 全局提示',

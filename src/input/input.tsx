@@ -6,7 +6,7 @@ import {
 } from 'tdesign-icons-vue';
 import camelCase from 'lodash/camelCase';
 import kebabCase from 'lodash/kebabCase';
-import { getUnicodeLength, limitUnicodeMaxLength } from '../_common/js/utils/helper';
+import { getUnicodeLength, limitUnicodeMaxLength, getIEVersion } from '../_common/js/utils/helper';
 import { InputValue, TdInputProps } from './type';
 import { getCharacterLength, omit } from '../utils/helper';
 import getConfigReceiverMixins, { InputConfig, getGlobalIconMixins } from '../config-provider/config-receiver';
@@ -36,6 +36,7 @@ interface InputInstance extends Vue {
 export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input'), getGlobalIconMixins()).extend({
   name: 'TInput',
   inheritAttrs: false,
+
   props: {
     ...props,
     showInput: {
@@ -49,9 +50,11 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
       default: false,
     },
   },
+
   inject: {
     tFormItem: { default: undefined },
   },
+
   data() {
     return {
       formDisabled: undefined,
@@ -62,6 +65,7 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
       composingRef: false,
       composingRefValue: this.value,
       resizeObserver: null as ResizeObserver,
+      preValue: this.value,
     };
   },
   computed: {
@@ -92,16 +96,15 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
     inputClasses(): ClassName {
       return [
         this.componentName,
-        this.commonSizeClassName[this.size] || '',
         {
+          [this.commonSizeClassName[this.size]]: this.size !== 'medium',
           [this.commonStatusClassName.disabled]: this.tDisabled,
           [this.commonStatusClassName.focused]: this.focused,
-          [`${this.classPrefix}-is-${this.tStatus}`]: this.tStatus,
+          [`${this.classPrefix}-is-${this.tStatus}`]: this.tStatus && this.tStatus !== 'default',
           [`${this.classPrefix}-align-${this.align}`]: this.align !== 'left',
           [`${this.classPrefix}-is-disabled`]: this.tDisabled,
           [`${this.classPrefix}-is-readonly`]: this.readonly,
           [`${this.componentName}--focused`]: this.focused,
-          [`${this.componentName}--auto-width`]: this.autoWidth && !this.keepWrapperWidth,
         },
       ];
     },
@@ -111,6 +114,7 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         `${wrapClass}`,
         {
           [`${wrapClass}--focused`]: this.focused,
+          [`${this.componentName}--auto-width`]: this.autoWidth && !this.keepWrapperWidth,
         },
       ];
     },
@@ -142,6 +146,10 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
     tStatus(): string {
       return this.status || this.innerStatus;
     },
+
+    isIE(): boolean {
+      return getIEVersion() <= 11;
+    },
   },
 
   watch: {
@@ -159,6 +167,13 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
     value: {
       handler(val) {
         this.inputValue = this.format ? this.format(val) : val;
+        this.preValue = this.inputValue;
+
+        // limit props value
+        const newVal = this.getValueByLimitNumber(val);
+        if (newVal !== val && this.type !== 'number') {
+          emitEvent<Parameters<TdInputProps['onChange']>>(this, 'change', newVal, { trigger: 'initial' });
+        }
       },
       immediate: true,
     },
@@ -209,7 +224,7 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
     // 当元素默认为 display: none 状态，无法提前准确计算宽度，因此需要监听元素宽度变化。比如：Tabs 场景切换。
     addTableResizeObserver(element: Element) {
       // IE 11 以下使用设置 minWidth 兼容；IE 11 以上使用 ResizeObserver
-      if (typeof window.ResizeObserver === 'undefined' || !element) return;
+      if (typeof window.ResizeObserver === 'undefined' || !element || this.isIE) return;
       this.resizeObserver = new window.ResizeObserver(() => {
         this.updateInputWidth();
       });
@@ -229,11 +244,11 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
 
       // 插槽名称为中划线
       if (this.$scopedSlots[kebabCase(iconType)]) {
-        return this.$scopedSlots[kebabCase(iconType)](null);
+        return this.$scopedSlots[kebabCase(iconType)](h);
       }
       // 插槽名称为驼峰
       if (this.$scopedSlots[camelCase(iconType)]) {
-        return this.$scopedSlots[camelCase(iconType)](null);
+        return this.$scopedSlots[camelCase(iconType)](h);
       }
 
       return null;
@@ -254,11 +269,10 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
     },
     handleKeydown(e: KeyboardEvent) {
       if (this.tDisabled) return;
-      const code = e.code || e.key;
       const {
         currentTarget: { value },
       }: any = e;
-      if (code === 'Enter' || code === 'NumpadEnter') {
+      if (/enter/i.test(e.key) || /enter/i.test(e.code)) {
         emitEvent<Parameters<TdInputProps['onEnter']>>(this, 'enter', value, { e });
       } else {
         emitEvent<Parameters<TdInputProps['onKeydown']>>(this, 'keydown', value, { e });
@@ -281,23 +295,25 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
       }: any = e;
       emitEvent<Parameters<TdInputProps['onKeypress']>>(this, 'keypress', value, { e });
     },
-    onHandlePaste(e: ClipboardEvent) {
+    handlePaste(e: ClipboardEvent) {
       if (this.tDisabled) return;
       // @ts-ignore
       const clipData = e.clipboardData || window.clipboardData;
       emitEvent<Parameters<TdInputProps['onPaste']>>(this, 'paste', { e, pasteValue: clipData?.getData('text/plain') });
     },
+
     onHandleMousewheel(e: WheelEvent) {
       emitEvent<Parameters<TdInputProps['onWheel']>>(this, 'wheel', { e });
     },
+
     emitPassword() {
       const { renderType } = this;
       const toggleType = renderType === 'password' ? 'text' : 'password';
       this.renderType = toggleType;
     },
     emitClear(e: MouseEvent) {
+      emitEvent<Parameters<TdInputProps['onChange']>>(this, 'change', '', { e, trigger: 'clear' });
       emitEvent<Parameters<TdInputProps['onClear']>>(this, 'clear', { e });
-      emitEvent<Parameters<TdInputProps['onChange']>>(this, 'change', '', { e });
     },
     emitFocus(e: FocusEvent) {
       this.inputValue = this.value;
@@ -319,7 +335,8 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         currentTarget: { value },
       }: any = e;
       this.composingRefValue = value;
-      this?.onCompositionstart?.(value, { e });
+      this.$emit('compositionstart', value, { e });
+      this.onCompositionstart?.(value, { e });
     },
     compositionendHandler(e: CompositionEvent) {
       const {
@@ -330,24 +347,36 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         this.handleInput(e);
       }
       this.composingRefValue = '';
-      this?.onCompositionend?.(value, { e });
+      this.$emit('compositionend', value, { e });
+      this.onCompositionend?.(value, { e });
     },
     onRootClick(e: MouseEvent) {
       (this.$refs.inputRef as HTMLInputElement)?.focus();
-      this.$emit('click', e);
+      this.$emit('click', { e });
+      this.onClick?.({ e });
     },
     handleInput(e: InputEvent | CompositionEvent) {
+      this.preValue = this.inputValue + e.data;
       let {
         currentTarget: { value: val },
       }: any = e;
+      let preCursorPos: number;
       if (this.composingRef) {
         this.composingRefValue = val;
       } else {
         if (this.type !== 'number') {
           val = this.getValueByLimitNumber(val);
         }
-        emitEvent<Parameters<TdInputProps['onChange']>>(this, 'change', val, { e } as { e: MouseEvent | InputEvent });
-        // 受控，重要，勿删
+        emitEvent<Parameters<TdInputProps['onChange']>>(this, 'change', val, { e, trigger: 'input' });
+        // 受控，重要，勿删 input无法直接实现受控
+        if (!this.isIE) {
+          const inputRef = this.$refs.inputRef as HTMLInputElement;
+          preCursorPos = inputRef.selectionStart;
+          setTimeout(() => {
+            inputRef.selectionEnd = preCursorPos;
+          });
+        }
+
         this.$nextTick(() => {
           this.setInputValue(this.value);
         });
@@ -356,18 +385,18 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
 
     onInputMouseenter(e: MouseEvent) {
       this.mouseEvent(true);
-      this.onMouseenter?.({ e });
+      emitEvent<Parameters<TdInputProps['onMouseenter']>>(this, 'mouseenter', { e });
     },
 
     onInputMouseleave(e: MouseEvent) {
       this.mouseEvent(false);
-      this.onMouseleave?.({ e });
+      emitEvent<Parameters<TdInputProps['onMouseleave']>>(this, 'mouseleave', { e });
     },
 
     updateInputWidth() {
       const pre = this.$refs.inputPreRef as HTMLSpanElement;
       if (!pre) return;
-      const width = pre.offsetWidth;
+      const { width } = pre.getBoundingClientRect();
       if (this.$refs.inputRef) {
         (this.$refs.inputRef as HTMLInputElement).style.width = `${width}px`;
       }
@@ -396,17 +425,19 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
   },
 
   render(h: CreateElement): VNode {
-    const inputEvents = getValidAttrs({
+    const inputEvents = {
       focus: this.emitFocus,
       blur: this.formatAndEmitBlur,
       keydown: this.handleKeydown,
       keyup: this.handleKeyUp,
       keypress: this.handleKeypress,
-      paste: this.onHandlePaste,
+      paste: this.handlePaste,
+      compositionstart: this.compositionstartHandler,
+      compositionend: this.compositionendHandler,
       // input的change事件是失去焦点或者keydown的时候执行。这与api定义的change不符，所以不做任何变化。
       // eslint-disable-next-line @typescript-eslint/no-empty-function
       change: () => {},
-    });
+    };
 
     const wrapperAttrs = omit(this.$attrs, Object.keys(this.inputAttrs));
     const wrapperEvents = omit(this.$listeners, [...Object.keys(inputEvents), 'input', 'paste']);
@@ -464,11 +495,12 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         [`${this.componentName}--suffix`]: suffixIcon || suffixContent,
       },
     ];
+
     const inputNode = (
       <div
         class={classes}
-        onClick={this.onRootClick}
         {...{ attrs: wrapperAttrs, on: wrapperEvents }}
+        onClick={this.onRootClick}
         onMouseenter={this.onInputMouseenter}
         onMouseleave={this.onInputMouseleave}
         onwheel={this.onHandleMousewheel}
@@ -479,18 +511,17 @@ export default mixins(getConfigReceiverMixins<InputInstance, InputConfig>('input
         {labelContent}
         {this.showInput && (
           <input
-            {...{ attrs: this.inputAttrs, on: inputEvents }}
+            attrs={this.inputAttrs}
+            on={inputEvents}
             ref="inputRef"
             class={`${this.componentName}__inner`}
             value={this.composingRef ? this.composingRefValue : this.inputValue}
             onInput={this.handleInput}
-            onCompositionstart={this.compositionstartHandler}
-            onCompositionend={this.compositionendHandler}
           />
         )}
         {this.autoWidth && (
           <span ref="inputPreRef" class={`${this.classPrefix}-input__input-pre`}>
-            {this.value || this.tPlaceholder}
+            {this.preValue || this.tPlaceholder}
           </span>
         )}
         {suffixContent}
