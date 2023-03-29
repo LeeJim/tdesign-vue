@@ -9,7 +9,8 @@ export default function useClassName() {
       table: [
         `${classPrefix.value}-table`,
         {
-          [`${classPrefix.value}-table--chrome`]: /Chrome/.test(navigator?.userAgent),
+          [`${classPrefix.value}-table--chrome`]:
+            typeof navigator !== 'undefined' && /Chrome/.test(navigator?.userAgent),
         },
       ],
       columnResizableTable: `${classPrefix.value}-table--column-resizable`,
@@ -178,6 +179,7 @@ export default function useClassName() {
       ghost: `${classPrefix.value}-table__ele--draggable-ghost`,
       chosen: `${classPrefix.value}-table__ele--draggable-chosen`,
       dragging: `${classPrefix.value}-table__ele--draggable-dragging`,
+      dragSortTh: `${classPrefix.value}-table__th--drag-sort`,
     },
 
     virtualScrollClasses: {

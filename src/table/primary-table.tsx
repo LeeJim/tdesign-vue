@@ -296,6 +296,9 @@ export default defineComponent({
       scrollToElement: (data: any) => {
         primaryTableRef.value.virtualConfig.scrollToElement(data);
       },
+      scrollColumnIntoView: (colKey: string) => {
+        primaryTableRef.value.scrollColumnIntoView(colKey);
+      },
       validateRowData,
       validateTableData,
       clearValidateData,
@@ -370,6 +373,7 @@ export default defineComponent({
       bottomContent,
       firstFullRow,
       lastFullRow,
+      thDraggable: this.$props.dragSort === 'col',
       renderExpandedRow: this.showExpandedRow ? this.renderExpandedRow : undefined,
     };
 

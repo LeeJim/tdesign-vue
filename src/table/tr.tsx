@@ -66,7 +66,7 @@ export const TABLE_PROPS = [
   'onRowMouseup',
 ] as const;
 
-export type TrPropsKeys = typeof TABLE_PROPS[number];
+export type TrPropsKeys = (typeof TABLE_PROPS)[number];
 
 export interface TrProps extends TrCommonProps {
   row: TableRowData;
@@ -130,7 +130,14 @@ export function renderCell(
   if (extra?.cellEmptyContent) {
     return isFunction(extra.cellEmptyContent) ? extra.cellEmptyContent(h, params) : extra.cellEmptyContent;
   }
-  if (slots.cellEmptyContent) return slots.cellEmptyContent(params);
+  const hParams = h;
+  Object.assign(hParams, params || {});
+  if (slots.cellEmptyContent) {
+    return slots.cellEmptyContent(hParams);
+  }
+  if (slots['cell-empty-content']) {
+    return slots['cell-empty-content'](hParams);
+  }
   return r;
 }
 
@@ -187,11 +194,7 @@ export default defineComponent({
       return [trStyles.value?.classes, customClasses];
     });
 
-    const { hasLazyLoadHolder, tRowHeight } = useLazyLoad(
-      tableContentElm,
-      trRef,
-      reactive({ ...props.scroll, rowIndex: props.rowIndex }),
-    );
+    const { hasLazyLoadHolder, tRowHeight } = useLazyLoad(tableContentElm, trRef, reactive({ ...props.scroll }));
     const getTrListeners = (row: TableRowData, rowIndex: number) => {
       const trListeners: { [eventName: string]: (e: MouseEvent) => void } = {};
       // add events to row

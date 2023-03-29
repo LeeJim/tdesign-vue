@@ -1,28 +1,30 @@
 import { SetupContext } from '@vue/composition-api';
-import { TypeTreeProps, TypeTreeState, TypeEventState } from '../interface';
+import { TreeProps, TypeTreeState, TypeEventState } from '../interface';
 import { getMark, emitEvent } from '../util';
 import useTreeAction from './useTreeAction';
 
 // tree 组件一般事件处理
-export default function useTreeEvents(props: TypeTreeProps, context: SetupContext, state: TypeTreeState) {
-  const { cache } = state;
-
+export default function useTreeEvents(props: TreeProps, context: SetupContext, state: TypeTreeState) {
+  const treeState = state;
   const { toggleExpanded, toggleActived, toggleChecked } = useTreeAction(props, context, state);
 
   const handleClick = (evtState: TypeEventState) => {
     const { mouseEvent, event, node } = evtState;
-    if (!node) {
-      return;
-    }
+    if (!node || !mouseEvent) return;
 
-    cache.mouseEvent = mouseEvent;
+    // 用于向内部方法传递事件对象
+    treeState.mouseEvent = mouseEvent;
 
     let shouldExpand = props.expandOnClickNode;
     let shouldActive = !props.disabled && !node.disabled;
+
+    // 给节点添加属性 trigger="expand,active", ignore="expand,active"
+    // 来确认或者屏蔽动作
     ['trigger', 'ignore'].forEach((markName) => {
       const mark = getMark(markName, event.target as HTMLElement, event.currentTarget as HTMLElement);
       const markValue = mark?.value || '';
       if (markValue.indexOf('expand') >= 0) {
+        // 路径节点包含了 trigger="expand" ignore="expand"
         if (markName === 'trigger') {
           shouldExpand = true;
         } else if (markName === 'ignore') {
@@ -30,6 +32,7 @@ export default function useTreeEvents(props: TypeTreeProps, context: SetupContex
         }
       }
       if (markValue.indexOf('active') >= 0) {
+        // 路径节点包含了 trigger="active" ignore="active"
         if (markName === 'ignore') {
           shouldActive = false;
         }
@@ -40,26 +43,26 @@ export default function useTreeEvents(props: TypeTreeProps, context: SetupContex
       toggleExpanded(node);
     }
 
+    if (shouldActive) {
+      toggleActived(node);
+    }
+
     const evtCtx = {
       node: node.getModel(),
       e: mouseEvent,
     };
+    emitEvent<Parameters<TreeProps['onClick']>>(props, context, 'click', evtCtx);
 
-    if (shouldActive) {
-      toggleActived(node);
-      emitEvent<Parameters<TypeTreeProps['onClick']>>(props, context, 'click', evtCtx);
-    }
-
-    cache.mouseEvent = null;
+    treeState.mouseEvent = null;
   };
 
-  const handleChange = (evtState: TypeEventState) => {
+  const handleChange = (evtState: TypeEventState, ctx: { e: Event }) => {
     const { disabled } = props;
     const { node } = evtState;
     if (!node || disabled || node.disabled) {
       return;
     }
-    toggleChecked(node);
+    toggleChecked(node, ctx);
   };
 
   return {

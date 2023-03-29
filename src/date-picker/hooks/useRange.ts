@@ -1,5 +1,4 @@
 import { ref, computed, watch } from '@vue/composition-api';
-import dayjs from 'dayjs';
 import { usePrefixClass, useConfig } from '../../hooks/useConfig';
 
 import { TdDateRangePickerProps, DateValue } from '../type';
@@ -37,6 +36,7 @@ export default function useRange(props: TdDateRangePickerProps, { emit }: any) {
   const rangeInputProps = computed(() => ({
     ...props.rangeInputProps,
     ref: inputRef,
+    size: props.size,
     clearable: props.clearable,
     prefixIcon: props.prefixIcon,
     readonly: !props.allowInput,
@@ -73,10 +73,10 @@ export default function useRange(props: TdDateRangePickerProps, { emit }: any) {
       const newYear: Array<number> = [];
       const newMonth: Array<number> = [];
       const newTime: Array<string> = [];
-      newVal.forEach((v, i) => {
-        newYear.push(dayjs(v).year() || year.value[i]);
-        newMonth.push(dayjs(v).month() || month.value[i]);
-        newTime.push(dayjs(v).format(formatRef.value.timeFormat) || time.value[i]);
+      newVal.forEach((v) => {
+        newYear.push(parseToDayjs(v, formatRef.value.format).year());
+        newMonth.push(parseToDayjs(v, formatRef.value.format).month());
+        newTime.push(parseToDayjs(v, formatRef.value.format).format(formatRef.value.timeFormat));
       });
       year.value = newYear;
       month.value = newMonth;

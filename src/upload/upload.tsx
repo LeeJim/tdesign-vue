@@ -1,5 +1,6 @@
 import { computed, defineComponent, SetupContext } from '@vue/composition-api';
 import { UploadIcon } from 'tdesign-icons-vue';
+import useFormDisabled from '../hooks/useFormDisabled';
 import props from './props';
 import NormalFile from './themes/normal-file';
 import DraggerFile from './themes/dragger-file';
@@ -10,7 +11,7 @@ import Button from '../button';
 import { CommonDisplayFileProps, UploadProps } from './interface';
 import { UploadDragEvents } from './hooks/useDrag';
 import CustomFile from './themes/custom-file';
-import { renderContent } from '../utils/render-tnode';
+import { renderContent, renderTNodeJSX } from '../utils/render-tnode';
 
 export default defineComponent({
   name: 'TUpload',
@@ -19,6 +20,7 @@ export default defineComponent({
 
   setup(props: UploadProps, context: SetupContext) {
     const uploadData = useUpload(props, context);
+    const { formDisabled } = useFormDisabled();
 
     const {
       localeConfig,
@@ -30,10 +32,13 @@ export default defineComponent({
       uploading,
       tipsClasses,
       errorClasses,
+      placeholderClass,
       innerDisabled,
       onInnerRemove,
       onDragFileChange,
     } = uploadData;
+
+    const disabled = computed<boolean>(() => formDisabled.value || innerDisabled.value);
 
     const commonDisplayFileProps = computed<CommonDisplayFileProps>(() => ({
       files: uploadValue.value,
@@ -41,7 +46,7 @@ export default defineComponent({
       displayFiles: displayFiles.value,
       theme: props.theme,
       placeholder: props.placeholder,
-      disabled: innerDisabled.value,
+      disabled: disabled.value,
       tips: props.tips,
       status: props.status,
       sizeOverLimitMessage: sizeOverLimitMessage.value,
@@ -49,8 +54,10 @@ export default defineComponent({
       classPrefix: classPrefix.value,
       tipsClasses,
       errorClasses,
+      placeholderClass,
       locale: localeConfig.value,
       autoUpload: props.autoUpload,
+      showUploadProgress: props.showUploadProgress,
       abridgeName: props.abridgeName,
       fileListDisplay: props.fileListDisplay,
       onRemove: onInnerRemove,
@@ -92,23 +99,27 @@ export default defineComponent({
       const getDefaultTrigger = () => {
         if (this.theme === 'file-input') {
           return (
-            <Button disabled={this.innerDisabled} variant="outline" {...this.triggerButtonProps}>
+            <Button disabled={this.disabled} variant="outline" {...this.triggerButtonProps}>
               {this.triggerUploadText}
             </Button>
           );
         }
         return (
           <Button
-            disabled={this.innerDisabled}
+            disabled={this.disabled}
             variant="outline"
             icon={() => <UploadIcon />}
-            {...this.triggerButtonProps}
+            props={this.triggerButtonProps}
           >
             {this.triggerUploadText}
           </Button>
         );
       };
-      return renderContent(this, 'default', 'trigger') || getDefaultTrigger();
+      return (
+        renderContent(this, 'default', 'trigger', {
+          params: { dragActive: false, files: this.uploadValue },
+        }) || getDefaultTrigger()
+      );
     },
 
     getNormalFileNode() {
@@ -116,7 +127,10 @@ export default defineComponent({
         <NormalFile
           props={this.commonDisplayFileProps}
           multiple={this.multiple}
-          scopedSlots={{ fileListDisplay: this.$scopedSlots.fileListDisplay }}
+          scopedSlots={{
+            fileListDisplay: this.$scopedSlots.fileListDisplay,
+            'file-list-display': this.$scopedSlots['file-list-display'],
+          }}
         >
           <div class={`${this.classPrefix}-upload__trigger`} onClick={this.triggerUpload}>
             {this.renderTrigger()}
@@ -134,6 +148,11 @@ export default defineComponent({
           cancelUpload={this.cancelUpload}
           triggerUpload={this.triggerUpload}
           uploadFiles={this.uploadFiles}
+          onCancelUpload={this.innerCancelUpload}
+          scopedSlots={{
+            fileListDisplay: this.$scopedSlots.fileListDisplay,
+            'file-list-display': this.$scopedSlots['file-list-display'],
+          }}
         />
       );
     },
@@ -164,8 +183,10 @@ export default defineComponent({
           dragEvents={this.dragProps}
           uploadFiles={this.uploadFiles}
           cancelUpload={this.cancelUpload}
-          on={{
-            preview: this.onInnerPreview,
+          onPreview={this.onInnerPreview}
+          scopedSlots={{
+            fileListDisplay: this.$scopedSlots.fileListDisplay,
+            'file-list-display': this.$scopedSlots['file-list-display'],
           }}
         >
           <div class={`${this.classPrefix}-upload__trigger`} onClick={this.triggerUpload}>
@@ -187,10 +208,11 @@ export default defineComponent({
           childrenNode={this.$scopedSlots.default}
           scopedSlots={{
             dragContent: this.$scopedSlots.dragContent,
+            'drag-content': this.$scopedSlots['drag-content'],
             trigger: this.$scopedSlots.trigger,
           }}
         >
-          {this.renderTrigger()}
+          {!this.draggable && this.renderTrigger()}
         </CustomFile>
       );
     },
@@ -202,11 +224,12 @@ export default defineComponent({
         <input
           ref="inputRef"
           type="file"
-          disabled={this.innerDisabled}
+          disabled={this.disabled}
           onChange={this.onNormalFileChange}
           multiple={this.multiple}
           accept={this.accept}
           hidden
+          attrs={this.inputAttributes}
         />
         {['file', 'file-input'].includes(this.theme) && !this.draggable && this.getNormalFileNode()}
         {['file', 'image'].includes(this.theme) && this.draggable && this.getSingleFileDraggerUploadNode()}
@@ -214,9 +237,9 @@ export default defineComponent({
         {['image-flow', 'file-flow'].includes(this.theme) && this.getFlowListNode()}
         {this.theme === 'custom' && this.getCustomFile()}
 
-        {this.tips && (
+        {Boolean(this.tips || this.$scopedSlots.tips) && (
           <small class={[this.tipsClasses, { [`${this.classPrefix}-upload__tips-${this.status}`]: this.status }]}>
-            {this.tips}
+            {renderTNodeJSX(this, 'tips')}
           </small>
         )}
       </div>

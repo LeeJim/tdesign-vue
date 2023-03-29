@@ -138,9 +138,10 @@ export default defineComponent({
         color.value.update(
           color.value.gradientColors.length > 0 ? color.value.linearGradient : DEFAULT_LINEAR_GRADIENT,
         );
-        return;
+      } else {
+        color.value.update(color.value.rgba);
       }
-      color.value.update(color.value.rgba);
+      emitColorChange();
     };
 
     /**
@@ -342,7 +343,12 @@ export default defineComponent({
         />
         <div class={[`${baseClassName}__body`]}>
           {isGradient ? (
-            <linear-gradient color={this.color} disabled={this.disabled} handleChange={this.handleGradientChange} />
+            <linear-gradient
+              color={this.color}
+              disabled={this.disabled}
+              handleChange={this.handleGradientChange}
+              enableMultipleGradient={this.enableMultipleGradient}
+            />
           ) : null}
           <saturation-panel color={this.color} disabled={this.disabled} handleChange={this.handleSatAndValueChange} />
           <div class={[`${baseClassName}__sliders-wrapper`]}>

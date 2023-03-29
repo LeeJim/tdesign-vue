@@ -1,5 +1,5 @@
 import { VNodeDirective } from 'vue';
-import { createPopper, Placement } from '@popperjs/core';
+import { createPopper } from '@popperjs/core';
 import { on, off, once } from '../utils/dom';
 import { renderTNodeJSX, renderContent } from '../utils/render-tnode';
 import { getIEVersion } from '../utils/helper';
@@ -9,31 +9,12 @@ import { PopupVisibleChangeContext, TdPopupProps } from './type';
 import Container from './container';
 import { getClassPrefixMixins } from '../config-provider/config-receiver';
 import mixins from '../utils/mixins';
+import { emitEvent } from '../utils/event';
+import { getPopperPlacement, attachListeners, triggers } from './utils';
 
 const classPrefixMixins = getClassPrefixMixins('popup');
 
-const triggers = ['click', 'hover', 'focus', 'context-menu'] as const;
 const injectionKey = '__T_POPUP';
-
-function getPopperPlacement(placement: TdPopupProps['placement']) {
-  return placement.replace(/-(left|top)$/, '-start').replace(/-(right|bottom)$/, '-end') as Placement;
-}
-
-function attachListeners(elm: Element) {
-  const offs: Array<() => void> = [];
-  return {
-    add<K extends keyof HTMLElementEventMap>(type: K, listener: (ev: HTMLElementEventMap[K]) => void) {
-      on(elm, type, listener);
-      offs.push(() => {
-        off(elm, type, listener);
-      });
-    },
-    clean() {
-      offs.forEach((handler) => handler?.());
-      offs.length = 0;
-    },
-  };
-}
 
 export default mixins(classPrefixMixins).extend({
   name: 'TPopup',
@@ -87,7 +68,7 @@ export default mixins(classPrefixMixins).extend({
         this.overlayInnerClassName,
       ];
     },
-    hasTrigger(): Record<typeof triggers[number], boolean> {
+    hasTrigger(): Record<(typeof triggers)[number], boolean> {
       return triggers.reduce(
         (map, trigger) => ({
           ...map,
@@ -110,7 +91,7 @@ export default mixins(classPrefixMixins).extend({
       if (visible) {
         this.preventClosing(true);
         if (!this.hasDocumentEvent) {
-          on(document, 'click', this.handleDocumentClick, true);
+          on(document, 'mousedown', this.handleDocumentClick, true);
           this.hasDocumentEvent = true;
         }
         // focus trigger esc 隐藏浮层
@@ -127,7 +108,7 @@ export default mixins(classPrefixMixins).extend({
       } else {
         this.preventClosing(false);
         // destruction is delayed until after animation ends
-        off(document, 'click', this.handleDocumentClick, true);
+        off(document, 'mousedown', this.handleDocumentClick, true);
         this.hasDocumentEvent = false;
         this.mouseInRange = false;
       }
@@ -187,7 +168,7 @@ export default mixins(classPrefixMixins).extend({
       (this as any).popup?.preventClosing(false);
     }
     this.destroyPopper();
-    off(document, 'click', this.handleDocumentClick, true);
+    off(document, 'mousedown', this.handleDocumentClick, true);
     clearTimeout(this.timeout);
   },
   methods: {
@@ -200,7 +181,6 @@ export default mixins(classPrefixMixins).extend({
         this.popper.update();
         return;
       }
-
       this.popper = createPopper(triggerEl, popperEl, {
         modifiers:
           getIEVersion() > 9
@@ -220,6 +200,7 @@ export default mixins(classPrefixMixins).extend({
         onFirstUpdate: () => {
           this.$nextTick(this.updatePopper);
         },
+        ...this.popperOptions,
       });
     },
 
@@ -272,6 +253,14 @@ export default mixins(classPrefixMixins).extend({
     handleToggle(context: PopupVisibleChangeContext) {
       this.emitPopVisible(!this.visible, context);
     },
+    handleOnScroll(e: WheelEvent) {
+      const { scrollTop, clientHeight, scrollHeight } = e.target as HTMLDivElement;
+      if (scrollHeight - scrollTop === clientHeight) {
+        // touch bottom
+        emitEvent(this, 'scroll-to-bottom', { e });
+      }
+      emitEvent(this, 'scroll', { e });
+    },
     handleOpen(context: Pick<PopupVisibleChangeContext, 'trigger'>) {
       clearTimeout(this.timeout);
       this.timeout = setTimeout(
@@ -291,18 +280,24 @@ export default mixins(classPrefixMixins).extend({
       );
     },
     handleDocumentClick(ev?: MouseEvent) {
-      if (this.contentClicked) {
-        // clear the flag after mousedown
-        setTimeout(() => {
-          this.contentClicked = false;
-        });
-        return;
-      }
-      const triggerEl = this.$el as HTMLElement;
-      // ignore document event when clicking trigger element
-      if (triggerEl.contains(ev.target as Node)) return;
-      this.visibleState = 0;
-      this.emitPopVisible(false, { trigger: 'document' });
+      // Make sure content's mousedown event fires first
+      setTimeout(() => {
+        if (this.contentClicked) {
+          // clear the flag after mousedown
+          setTimeout(() => {
+            this.contentClicked = false;
+          });
+          return;
+        }
+        const triggerEl = this.$el as HTMLElement;
+        // ignore document event when clicking trigger element
+        if (triggerEl.contains(ev.target as Node)) return;
+        // ignore document event if popper panel clicked
+        const popperEl = this.$refs.popper as HTMLDivElement;
+        if (popperEl.contains(ev.target as Node)) return;
+        this.visibleState = 0;
+        this.emitPopVisible(false, { trigger: 'document', e: ev });
+      });
     },
     emitPopVisible(visible: boolean, context: PopupVisibleChangeContext) {
       if (this.disabled || visible === this.visible) return;
@@ -362,12 +357,11 @@ export default mixins(classPrefixMixins).extend({
 
   render(h) {
     const {
-      visible, destroyOnClose, hasTrigger, onScroll,
+      visible, destroyOnClose, hasTrigger, handleOnScroll,
     } = this;
     const ref = renderContent(this, 'default', 'triggerElement');
     const content = renderTNodeJSX(this, 'content');
     const hidePopup = this.hideEmptyPopup && ['', undefined, null].includes(content);
-
     const overlay = visible || !destroyOnClose
       ? h(
         'div',
@@ -405,20 +399,17 @@ export default mixins(classPrefixMixins).extend({
             {
               class: this.overlayClasses,
               ref: 'overlay',
-              on: onScroll
-                ? {
-                  scroll(e: WheelEvent) {
-                    onScroll({ e });
-                  },
-                }
-                : undefined,
+              on: {
+                scroll(e: WheelEvent) {
+                  handleOnScroll(e);
+                },
+              },
             },
             [content, this.showArrow && h('div', { class: `${this.componentName}__arrow` })],
           ),
         ],
       )
       : null;
-
     return (
       <Container
         ref="container"

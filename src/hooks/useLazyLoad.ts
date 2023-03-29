@@ -5,7 +5,6 @@ import observe from '../_common/js/utils/observe';
 
 export type UseLazyLoadParams = UnwrapRef<{
   type: 'lazy' | 'virtual';
-  rowIndex: number;
   rowHeight?: number;
   bufferSize?: number;
 }>;
@@ -13,11 +12,11 @@ export type UseLazyLoadParams = UnwrapRef<{
 // 懒加载hooks
 export default function useLazyLoad(
   containerRef: Ref<HTMLElement>,
-  childRef: Ref<HTMLTableRowElement>,
+  childRef: Ref<HTMLElement>,
   params: UseLazyLoadParams,
 ) {
   const tRowHeight = computed(() => Math.max(params.rowHeight || 48, 48));
-  const isInit = ref(params.rowIndex === 0);
+  const isInit = ref(false);
   const hasLazyLoadHolder = computed(() => params?.type === 'lazy' && !isInit.value);
 
   const requestAnimationFrame = (typeof window === 'undefined' ? false : window.requestAnimationFrame) || ((cb) => setTimeout(cb, 16.6));

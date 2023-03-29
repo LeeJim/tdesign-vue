@@ -6,8 +6,8 @@ import {
   SetupContext,
   onMounted,
   computed,
-  onBeforeMount,
   ComputedRef,
+  onBeforeUnmount,
   Ref,
 } from '@vue/composition-api';
 import get from 'lodash/get';
@@ -15,14 +15,10 @@ import debounce from 'lodash/debounce';
 import log from '../../_common/js/log';
 import { ClassName, Styles } from '../../common';
 import { BaseTableCol, TableRowData, TdBaseTableProps } from '../type';
-import getScrollbarWidth from '../../_common/js/utils/getScrollbarWidth';
+import { getScrollbarWidthWithCSS } from '../../_common/js/utils/getScrollbarWidth';
 import { on, off } from '../../utils/dom';
 import {
-  FixedColumnInfo,
-  TableRowFixedClasses,
-  RowAndColFixedPosition,
-  TableColFixedClasses,
-  RecalculateColumnWidthFunc,
+  FixedColumnInfo, TableRowFixedClasses, RowAndColFixedPosition, TableColFixedClasses,
 } from '../interface';
 import { getIEVersion } from '../../_common/js/utils/helper';
 
@@ -125,7 +121,7 @@ export default function useFixed(
   const isFixedRightColumn = ref(false);
   const isFixedLeftColumn = ref(false);
 
-  const columnResizable = computed(() => resizable.value || allowResizeColumnWidth.value || false);
+  const columnResizable = computed(() => allowResizeColumnWidth.value ?? resizable.value ?? false);
 
   // 没有表头吸顶，没有虚拟滚动，则不需要表头宽度计算
   const notNeedThWidthList = computed(
@@ -137,14 +133,8 @@ export default function useFixed(
     ),
   );
 
-  const recalculateColWidth = ref<RecalculateColumnWidthFunc>(() => {});
-
   function setUseFixedTableElmRef(val: HTMLTableElement) {
     tableElmRef.value = val;
-  }
-
-  function setRecalculateColWidthFuncRef(val: RecalculateColumnWidthFunc) {
-    recalculateColWidth.value = val;
   }
 
   function getColumnMap(
@@ -228,7 +218,9 @@ export default function useFixed(
       // 多级表头，使用父元素作为初始基本位置
       const defaultWidth = i === columns.length - 1 ? parent?.right || 0 : 0;
       const lastColInfo = initialColumnMap.get(lastCol?.colKey || i + 1);
-      colInfo.right = (lastColInfo?.right || defaultWidth) + (lastColInfo?.width || 0);
+      if (colInfo) {
+        colInfo.right = (lastColInfo?.right || defaultWidth) + (lastColInfo?.width || 0);
+      }
       // 多级表头
       if (col.children?.length) {
         setFixedRightPos(col.children, initialColumnMap, colInfo);
@@ -310,7 +302,7 @@ export default function useFixed(
 
   let shadowLastScrollLeft: number;
   const updateColumnFixedShadow = (target: HTMLElement, extra?: { skipScrollLimit?: boolean }) => {
-    if (!isFixedColumn || !target) return;
+    if (!isFixedColumn.value || !target) return;
     const { scrollLeft } = target;
     // 只有左右滚动，需要更新固定列阴影
     if (shadowLastScrollLeft === scrollLeft && (!extra || !extra.skipScrollLimit)) return;
@@ -318,8 +310,8 @@ export default function useFixed(
     const isShowRight = target.clientWidth + scrollLeft < target.scrollWidth;
     const isShowLeft = scrollLeft > 0;
     if (showColumnShadow.left === isShowLeft && showColumnShadow.right === isShowRight) return;
-    showColumnShadow.left = isShowLeft;
-    showColumnShadow.right = isShowRight;
+    showColumnShadow.left = isShowLeft && isFixedLeftColumn.value;
+    showColumnShadow.right = isShowRight && isFixedRightColumn.value;
   };
 
   // 多级表头场景较为复杂：为了滚动的阴影效果，需要知道哪些列是边界列，左侧固定列的最后一列，右侧固定列的第一列，每一层表头都需要兼顾
@@ -377,7 +369,7 @@ export default function useFixed(
     if (!rect) return;
     // 存在纵向滚动条，且固定表头时，需去除滚动条宽度
     const reduceWidth = isFixedHeader.value ? scrollbarWidth.value : 0;
-    tableWidth.value = rect.width - reduceWidth - (props.bordered ? 1 : 0);
+    tableWidth.value = Math.floor(rect.width - reduceWidth - (props.bordered ? 1 : 0));
     const elmRect = tableElmRef?.value?.getBoundingClientRect();
     tableElmWidth.value = elmRect?.width;
   };
@@ -390,33 +382,34 @@ export default function useFixed(
     affixRef.footerBottomAffixRef.value?.handleScroll?.();
   };
 
+  const calculateThWidthList = (trList: HTMLCollection) => {
+    const widthMap: { [colKey: string]: number } = {};
+    for (let i = 0, len = trList.length; i < len; i++) {
+      const thList = trList[i].children;
+      // second for used for multiple row header
+      for (let j = 0, thLen = thList.length; j < thLen; j++) {
+        const th = thList[j] as HTMLElement;
+        const colKey = th.dataset.colkey;
+        widthMap[colKey] = th.getBoundingClientRect().width;
+      }
+    }
+    return widthMap;
+  };
+
   const updateThWidthList = (trList: HTMLCollection | { [colKey: string]: number }) => {
     if (trList instanceof HTMLCollection) {
       if (columnResizable.value) return;
-      const widthMap: { [colKey: string]: number } = {};
-      for (let i = 0, len = trList.length; i < len; i++) {
-        const thList = trList[i].children;
-        for (let j = 0, thLen = thList.length; j < thLen; j++) {
-          const th = thList[j] as HTMLElement;
-          const colKey = th.dataset.colkey;
-          widthMap[colKey] = th.getBoundingClientRect().width;
-        }
-      }
-      thWidthList.value = widthMap;
+      thWidthList.value = calculateThWidthList(trList);
     } else {
-      if (!thWidthList.value) {
-        thWidthList.value = {};
-      }
+      thWidthList.value = thWidthList.value || {};
       Object.entries(trList).forEach(([colKey, width]) => {
         thWidthList.value[colKey] = width;
       });
     }
+    return thWidthList.value;
   };
 
   const updateThWidthListHandler = () => {
-    if (columnResizable.value) {
-      recalculateColWidth.value(finalColumns.value, thWidthList.value, tableLayout.value, tableElmWidth.value);
-    }
     if (notNeedThWidthList.value) return;
     const timer = setTimeout(() => {
       updateTableWidth();
@@ -443,11 +436,12 @@ export default function useFixed(
     context.emit('scroll', { e });
   };
 
-  const getThWidthList = () => {
-    if (!thWidthList.value) {
-      thWidthList.value = {};
+  const getThWidthList = (type?: 'default' | 'calculate') => {
+    if (type === 'calculate') {
+      const trList = tableContentRef.value?.querySelector('thead')?.children;
+      return calculateThWidthList(trList);
     }
-    return thWidthList.value;
+    return thWidthList.value || {};
   };
 
   watch(
@@ -485,9 +479,6 @@ export default function useFixed(
 
   watch(finalColumns, () => {
     resetThWidthList();
-    if (columnResizable.value) {
-      recalculateColWidth.value(finalColumns.value, thWidthList.value, tableLayout.value, tableElmWidth.value);
-    }
   });
 
   // 影响表头宽度的元素
@@ -510,18 +501,21 @@ export default function useFixed(
     { immediate: true },
   );
 
-  const refreshTable = debounce(() => {
+  const refreshTable = () => {
     updateTableWidth();
     updateFixedHeader();
     updateThWidthListHandler();
     updateAffixPosition();
+
     if (isFixedColumn.value || isFixedHeader.value) {
       updateFixedStatus();
       updateColumnFixedShadow(tableContentRef.value, { skipScrollLimit: true });
     }
-  }, 30);
+  };
 
-  const onResize = refreshTable;
+  const onResize = debounce(() => {
+    refreshTable();
+  }, 30);
 
   let resizeObserver: ResizeObserver = null;
   function addTableResizeObserver(tableElement: HTMLDivElement) {
@@ -530,19 +524,20 @@ export default function useFixed(
     off(window, 'resize', onResize);
     resizeObserver = new window.ResizeObserver(() => {
       refreshTable();
+      const timer = setTimeout(() => {
+        refreshTable();
+        clearTimeout(timer);
+      }, 250);
     });
     resizeObserver.observe(tableElement);
     tableRef.value = tableElement;
   }
 
   onMounted(() => {
-    const scrollWidth = getScrollbarWidth();
+    const scrollWidth = getScrollbarWidthWithCSS();
     scrollbarWidth.value = scrollWidth;
     const timer = setTimeout(() => {
       updateTableWidth();
-      if (columnResizable.value) {
-        recalculateColWidth.value(finalColumns.value, thWidthList.value, tableLayout.value, tableElmWidth.value);
-      }
       clearTimeout(timer);
     });
     const isWatchResize = isFixedColumn.value || isFixedHeader.value || !notNeedThWidthList.value || !data.value.length;
@@ -552,7 +547,7 @@ export default function useFixed(
     }
   });
 
-  onBeforeMount(() => {
+  onBeforeUnmount(() => {
     off(window, 'resize', onResize);
     resizeObserver?.unobserve(tableRef.value);
     resizeObserver?.disconnect();
@@ -560,6 +555,16 @@ export default function useFixed(
 
   const setData = (dataSource: TableRowData[]) => {
     data.value = dataSource;
+  };
+
+  const setTableElmWidth = (width: number) => {
+    if (tableElmWidth.value === width) return;
+    tableElmWidth.value = width;
+  };
+
+  const updateTableAfterColumnResize = () => {
+    updateFixedStatus();
+    updateFixedHeader();
   };
 
   return {
@@ -576,13 +581,14 @@ export default function useFixed(
     scrollbarWidth,
     setData,
     refreshTable,
+    setTableElmWidth,
     emitScrollEvent,
     updateThWidthListHandler,
     updateColumnFixedShadow,
     setUseFixedTableElmRef,
     getThWidthList,
     updateThWidthList,
-    setRecalculateColWidthFuncRef,
     addTableResizeObserver,
+    updateTableAfterColumnResize,
   };
 }

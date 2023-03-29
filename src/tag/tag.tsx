@@ -19,10 +19,10 @@ export default mixins(getConfigReceiverMixins<Vue, TagConfig>('tag'), getGlobalI
       return [
         `${this.componentName}`,
         `${this.componentName}--${this.theme}`,
-        this.commonSizeClassName[this.size],
         `${this.componentName}--${this.variant}`,
         this.shape !== 'square' && `${this.componentName}--${this.shape}`,
         {
+          [this.commonSizeClassName[this.size]]: this.size !== 'medium',
           [`${this.componentName}--ellipsis`]: this.maxWidth,
           [`${this.componentName}--close`]: this.closable,
           [`${this.classPrefix}-is-disabled`]: this.disabled,
@@ -30,8 +30,12 @@ export default mixins(getConfigReceiverMixins<Vue, TagConfig>('tag'), getGlobalI
         },
       ];
     },
-    tagStyle(): Styles {
-      if (this.maxWidth) return { maxWidth: `${this.maxWidth}px` };
+    textStyle(): Styles {
+      if (this.maxWidth) {
+        return {
+          maxWidth: isNaN(Number(this.maxWidth)) ? this.maxWidth : `${this.maxWidth}px`,
+        };
+      }
       return {};
     },
   },
@@ -72,13 +76,18 @@ export default mixins(getConfigReceiverMixins<Vue, TagConfig>('tag'), getGlobalI
     // 标签内容
     const tagContent: TNodeReturnValue = renderContent(this, 'default', 'content');
 
+    const title = typeof tagContent === 'string' ? tagContent : '';
+    const titleAttribute = title && this.maxWidth ? { title } : undefined;
     // 图标
     const icon = renderTNodeJSX(this, 'icon');
-
     return (
       <span class={this.tagClass} onClick={this.handleClick}>
         {icon}
-        <span style={this.tagStyle} class={this.maxWidth ? `${this.componentName}--text` : undefined}>
+        <span
+          class={this.maxWidth ? `${this.componentName}--text` : undefined}
+          style={this.textStyle}
+          attrs={titleAttribute}
+        >
           {tagContent}
         </span>
         {!this.disabled ? closeIcon : undefined}
