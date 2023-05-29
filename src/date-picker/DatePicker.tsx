@@ -60,7 +60,7 @@ export default defineComponent({
       if (visible) {
         year.value = parseToDayjs(value.value, formatRef.value.format).year();
         month.value = parseToDayjs(value.value, formatRef.value.format).month();
-        time.value = formatTime(value.value, formatRef.value.timeFormat, props.defaultTime);
+        time.value = formatTime(value.value, formatRef.value.format, formatRef.value.timeFormat, props.defaultTime);
       } else {
         isHoverCell.value = false;
       }
@@ -193,7 +193,7 @@ export default defineComponent({
     }
 
     // 预设
-    function onPresetClick(presetValue: DateValue | (() => DateValue)) {
+    function onPresetClick(presetValue: any, context: any) {
       const presetVal = typeof presetValue === 'function' ? presetValue() : presetValue;
       onChange?.(
         formatDate(presetVal, {
@@ -205,6 +205,8 @@ export default defineComponent({
           trigger: 'preset',
         },
       );
+      props.onPresetClick?.(context);
+      emit('preset-click', context);
       popupVisible.value = false;
     }
 
@@ -278,6 +280,7 @@ export default defineComponent({
         <TSelectInput
           disabled={isDisabled}
           value={inputValue}
+          inputValue={inputValue}
           status={this.status}
           tips={this.tips}
           popupProps={datePickerPopupProps}

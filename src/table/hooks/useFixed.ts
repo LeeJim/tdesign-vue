@@ -353,8 +353,8 @@ export default function useFixed(
   const updateFixedHeader = () => {
     const timer = setTimeout(() => {
       if (!tableContentRef.value) return;
-      isFixedHeader.value = tableContentRef.value.scrollHeight > tableContentRef.value.clientHeight;
-      isWidthOverflow.value = tableContentRef.value.scrollWidth > tableContentRef.value.clientWidth;
+      isFixedHeader.value = tableContentRef.value.scrollHeight - tableContentRef.value.clientHeight >= scrollbarWidth.value;
+      isWidthOverflow.value = tableContentRef.value.scrollWidth - tableContentRef.value.clientWidth >= scrollbarWidth.value;
       const pos = tableContentRef.value.getBoundingClientRect();
       virtualScrollHeaderPos.value = {
         top: pos.top,
@@ -369,7 +369,7 @@ export default function useFixed(
     if (!rect) return;
     // 存在纵向滚动条，且固定表头时，需去除滚动条宽度
     const reduceWidth = isFixedHeader.value ? scrollbarWidth.value : 0;
-    tableWidth.value = Math.floor(rect.width - reduceWidth - (props.bordered ? 1 : 0));
+    tableWidth.value = rect.width - reduceWidth - (props.bordered ? 1 : 0);
     const elmRect = tableElmRef?.value?.getBoundingClientRect();
     tableElmWidth.value = elmRect?.width;
   };

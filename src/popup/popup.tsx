@@ -1,5 +1,6 @@
 import { VNodeDirective } from 'vue';
 import { createPopper } from '@popperjs/core';
+import debounce from 'lodash/debounce';
 import { on, off, once } from '../utils/dom';
 import { renderTNodeJSX, renderContent } from '../utils/render-tnode';
 import { getIEVersion } from '../utils/helper';
@@ -255,9 +256,13 @@ export default mixins(classPrefixMixins).extend({
     },
     handleOnScroll(e: WheelEvent) {
       const { scrollTop, clientHeight, scrollHeight } = e.target as HTMLDivElement;
-      if (scrollHeight - scrollTop === clientHeight) {
+      // 防止多次触发添加截流
+      const debounceOnScrollBottom = debounce((e) => emitEvent(this, 'scroll-to-bottom', { e }), 100);
+
+      // windows 下 scrollTop 会出现小数，这里取整
+      if (clientHeight + Math.floor(scrollTop) === scrollHeight) {
         // touch bottom
-        emitEvent(this, 'scroll-to-bottom', { e });
+        debounceOnScrollBottom(e);
       }
       emitEvent(this, 'scroll', { e });
     },
@@ -294,7 +299,7 @@ export default mixins(classPrefixMixins).extend({
         if (triggerEl.contains(ev.target as Node)) return;
         // ignore document event if popper panel clicked
         const popperEl = this.$refs.popper as HTMLDivElement;
-        if (popperEl.contains(ev.target as Node)) return;
+        if (popperEl?.contains(ev.target as Node)) return;
         this.visibleState = 0;
         this.emitPopVisible(false, { trigger: 'document', e: ev });
       });
